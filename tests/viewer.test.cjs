@@ -116,3 +116,11 @@ test('agents resolve to their own main session, use verified task labels or side
   assert.equal(one.displayTitle,'Real title');assert.equal(one.ownerTitle,'Parent');assert.equal(one.parentFileName,parent.fileName);
   assert.equal(two.displayTitle,'Sidecar title');assert.equal(two.agentType,'Explore');assert.equal(wrong.parentFileName,undefined);
 });
+
+test('output files use matched successful results and retain distinct paths and latest successful call',()=>{
+  const call=(id,path,name='Edit')=>({type:'tool_use',id,name,input:{file_path:path}});
+  const result=(id,error=false)=>({type:'tool_result',tool_use_id:id,is_error:error});
+  const files=c.cvOutputFiles([{content:[call('a','x/README.md'),call('b','y/README.md'),result('b'),result('a')]},
+    {content:[call('c','x/README.md'),result('c'),call('d','x/README.md'),result('d',true),call('e','unfinished'),call('f','input','Read'),result('f')]}]);
+  assert.deepEqual(Array.from(files,item=>[item.path,item.index,item.step]),[['y/README.md',0,1],['x/README.md',1,0]]);
+});
