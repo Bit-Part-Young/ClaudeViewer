@@ -72,3 +72,47 @@ test('SDK result finalizes an existing identical reply instead of duplicating it
   const error=c.ccToConv(jsonl([{type:'result',is_error:true,subtype:'error_max_turns',errors:['limit reached']}]),meta);
   assert.match(error.chat_messages[0].content[0].text,/limit reached/);
 });
+
+test('forks use the owning file, immediate inherited owner and matching message UUID',()=>{
+  const ids=Array.from({length:8},(_,i)=>'00000000-0000-4000-8000-'+String(i).padStart(12,'0'));
+  const turn=(id,uuid)=>({...user('prompt '+uuid,uuid),sessionId:id});
+  const title=(id,name)=>({type:'custom-title',sessionId:id,customTitle:name});
+  const row=(id,records,fileName=id+'.jsonl')=>{
+    const info=c.ccSessionInfo(records,fileName);
+    return {...info,fileName,lineage:c.ccTranscriptLineage(records,info.sessionId)};
+  };
+  const first=turn(ids[0],'u0'),second=turn(ids[1],'u1');
+  const history=[first,title(ids[0],'original')];
+  const fork=[...history,second,{type:'ai-title',sessionId:ids[1],aiTitle:'renamed'}];
+  const copied=[first,second,turn(ids[2],'u2')];
+  const root=row(ids[0],history),child=row(ids[1],fork),grandchild=row(ids[2],copied);
+  const missing=row(ids[3],[turn(ids[7],'missing'),turn(ids[3],'own')]);
+  const lookalike=row(ids[4],[turn(ids[0],'different-uuid'),turn(ids[4],'u4'),title(ids[4],'original (fork)')]);
+  const agent=row(ids[0],history,'agents/agent-x.jsonl');agent.isAgent=true;
+  const ambiguous=row(ids[5],[first,turn(ids[5],'u5'),second]);
+  const copy=row(ids[6],history);
+  c.ccLinkForks([grandchild,lookalike,agent,missing,root,child,ambiguous,copy]);
+  assert.equal(child.sessionId,ids[1]);assert.equal(child.displayTitle,'renamed');
+  assert.equal(child.parentFileName,root.fileName);assert.equal(grandchild.parentFileName,child.fileName);
+  for(const s of [root,agent,missing,lookalike,ambiguous,copy])assert.equal(s.parentFileName,'');
+  const conv=c.ccToConv(jsonl(fork),{dirName:'p',s:child});
+  assert.equal(conv._cc.sessionId,ids[1]);assert.equal(conv.name,'renamed');assert.equal(conv.chat_messages.length,2);
+  const cycleA=row(ids[0],[second,first]),cycleB=row(ids[1],[first,second]);
+  c.ccLinkForks([cycleA,cycleB]);assert.equal(cycleA.parentFileName,'');assert.equal(cycleB.parentFileName,'');
+});
+
+test('agents resolve to their own main session, use verified task labels or sidecar, and reject conflicting owners',()=>{
+  const id='10000000-0000-4000-8000-000000000001',other='20000000-0000-4000-8000-000000000002';
+  const parent={fileName:id+'.jsonl',sessionId:id,displayTitle:'Parent'};
+  const task=(n,sessionId=id)=>({isAgent:true,sessionId,fileName:id+'/subagents/agent-'+n+'.jsonl',agentId:n,displayTitle:'Long prompt'});
+  const one=task('a'),two=task('b'),wrong=task('c',other);
+  two.meta={description:'Sidecar title',agentType:'Explore'};
+  const calls=c.ccAgentCalls([
+    {type:'assistant',sessionId:id,message:{content:[{type:'tool_use',id:'call',name:'Agent',input:{description:'Real title',subagent_type:'general-purpose'}}]}},
+    {type:'user',sessionId:id,toolUseResult:{agentId:'a'},message:{content:[{type:'tool_result',tool_use_id:'call'}]}},
+    {type:'assistant',sessionId:other,message:{content:[{type:'tool_use',id:'call',name:'Agent',input:{description:'Inherited'}}]}}
+  ],id);
+  c.ccLinkAgents([parent,one,two,wrong],new Map([[parent.fileName,calls]]));
+  assert.equal(one.displayTitle,'Real title');assert.equal(one.ownerTitle,'Parent');assert.equal(one.parentFileName,parent.fileName);
+  assert.equal(two.displayTitle,'Sidecar title');assert.equal(two.agentType,'Explore');assert.equal(wrong.parentFileName,undefined);
+});
