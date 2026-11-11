@@ -662,6 +662,24 @@ mark.hl.cur{background:var(--primary);color:#fff}
 .cc-dot{color:#4f7a4d;font-size:10px;flex-shrink:0}
 .cc-sess{margin:0 0 6px 10px}
 .cc-tok{font-size:12px;font-weight:500;color:var(--t3);margin-left:8px;font-family:var(--fm)}
+
+/* Claude Code activity timeline: native disclosure works offline and by keyboard. */
+.activity-group{border:1px solid var(--bd);border-radius:13px;margin:8px 0 12px;background:var(--bg);width:100%;overflow:hidden}
+.activity-group>summary{cursor:pointer;padding:11px 14px;font-size:12px;color:var(--t2);list-style-position:inside}
+.activity-group>summary:focus-visible,.activity-entry>summary:focus-visible{outline:2px solid var(--primary);outline-offset:-3px}
+.activity-list{border-top:1px solid var(--bd)}
+.activity-entry{border-bottom:1px solid var(--bd)}.activity-entry:last-child{border-bottom:0}
+.activity-entry>summary{padding:9px 13px;font-size:12px;cursor:pointer;color:var(--t2);overflow-wrap:anywhere}
+.activity-error>summary{color:var(--pd)}
+.activity-content{padding:12px 15px;border-top:1px solid var(--bd);font-size:13px;line-height:1.7;overflow:auto;max-height:650px}
+.activity-content pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;font-family:var(--fm)}
+.activity-content p{margin:7px 0}.activity-content ul,.activity-content ol{padding-left:20px}
+.activity-content code{font-family:var(--fm);font-size:.92em;background:var(--sand);border-radius:3px;padding:1px 4px}
+.activity-content pre code{background:none;padding:0}.bubble+.activity-group,.bubble+.bubble{margin-top:12px}
+.bubble.human p{margin:4px 0}.attachment-image img{max-width:100%;height:auto;border-radius:8px}
+.math-display{overflow-x:auto}.math-fallback{font-family:var(--fm);white-space:pre-wrap}
+.dh-actions{flex-wrap:wrap}
+@media(max-width:760px){.detail-header{flex-wrap:wrap}#detail-title{order:-1;flex-basis:100%;width:100%}.dh-actions{flex:1;justify-content:flex-end;min-width:0}}
 </style>
 </head>
 <body>
@@ -749,6 +767,8 @@ mark.hl.cur{background:var(--primary);color:#fff}
         <div id="detail-title"></div>
         <div class="dh-actions">
           <button class="srch-toggle-btn" id="srch-toggle" title="搜索结果面板">📋</button>
+          <button class="exp-btn" id="exp-html">↓ HTML</button>
+          <button class="exp-btn" id="exp-roles" title="分别导出用户输入和 Claude 输出，打包为 ZIP">↓ 分角色 MD</button>
           <button class="exp-btn" id="exp-md">↓ MD</button>
           <button class="exp-btn primary" id="exp-pdf">↓ PDF</button>
         </div>
@@ -822,11 +842,11 @@ mark.hl.cur{background:var(--primary);color:#fff}
 (function(){
 'use strict';
 // ── 版本号（发版只改这一处，标题与徽章自动同步）──
-const APP_VERSION='v6.0';
+const APP_VERSION='v6.0-code';
 const DEMO_DATA=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob("eyJhY2NvdW50Ijp7InV1aWQiOiJkZW1vLXVzZXIiLCJmdWxsX25hbWUiOiLlsI/mn6/vvIjnpLrkvovvvIkiLCJlbWFpbF9hZGRyZXNzIjoiZGVtb0BjbGF1ZGV2aWV3ZXIuYXBwIiwidmVyaWZpZWRfcGhvbmVfbnVtYmVyIjpudWxsfSwibWVtb3JpZXMiOnsiY29udmVyc2F0aW9uc19tZW1vcnkiOiIqKuWFs+S6juS9oCoqXG5cbuWwj+afr+aYr+S4gOWQjeS6p+WTgeiuvuiuoeW4iO+8jOWWnOasoueugOa0geWlveeUqOeahOW3peWFt++8jOaXpeW4uOeUqCBDbGF1ZGUg5aSE55CG5YaZ5L2c44CB57+76K+R44CB5Luj56CB54mH5q615ZKM6LWE5paZ5pW055CG44CCXG5cbioq5YGP5aW9Kipcblxu5Zac5qyi5p6B566A6K6+6K6h5LiO5byA5rqQ5bel5YW377yM5Lmg5oOv5oqK6YeN6KaB5a+56K+d5pys5Zyw5a2Y5qGj77yb5L2/55SoIE1hY++8jOWBj+Wlvea3seiJsuaooeW8j+OAglxuXG4qKuacgOi/keWcqOWBmioqXG5cbuWcqOaVtOeQhuS4jiBBSSDnmoTljoblj7Llr7nor53vvIzlr7vmib7og73mnKzlnLDmiZPlvIDjgIHmkJzntKLjgIHlr7zlh7rnmoTnrqHnkIbmlrnlvI/vvIznnIvph43jgIzmlbDmja7kuI3kuIrkvKDjgIHlrozlhajmnKzlnLDjgI3jgIIiLCJwcm9qZWN0X21lbW9yaWVzIjp7InByb2otMSI6IuivpemhueebrueUqOS6juS6p+WTgeiuvuiuoeWSqOivou+8muWwj+afr+W4uOmXruS6pOS6kua1geeoi+OAgeaWh+ahiOaOqui+nuS4juernuWTgeWIhuaekO+8jOWBj+WlveebtOaOpee7mee7k+iuuuOAgiJ9LCJhY2NvdW50X3V1aWQiOiJkZW1vLXVzZXIiLCJtZW1vcnlfZmlsZXMiOlt7InBhdGgiOiIvYXJlYXMvcHJvZHVjdC1kZXNpZ24ubWQiLCJjb250ZW50IjoiLS0tXG5uYW1lOiBwcm9kdWN0LWRlc2lnblxuZGVzY3JpcHRpb246IOWwj+afr+eahOS6p+WTgeiuvuiuoeW3peS9nOS5oOaDr1xuLS0tXG4tIOWBj+WlveaegeeugOeVjOmdou+8jOiDveecgeeahOWNoeeJh+S4gOW+i+ecgeaOiVxuLSDkuqTkupLmlofmoYjorrLnqbbjgIzkuIDlj6Xor53or7TmuIXjgI3vvIzkuI3lhpnop6Pph4rmgKfplb/lj6Vcbi0g5rex6Imy5qih5byP5piv5Yia6ZyA77yM5Lu75L2V6YWN6Imy6YO96KaB5Lik5aWX5LiA6LW36aqMXG4tIOivhOWuoeWJjeS5oOaDr+WFiOWHuuS4gOeJiOS9juS/neecn+e6v+ahhu+8jOWGjeiwiOinhuiniSJ9LHsicGF0aCI6Ii9wcmVmZXJlbmNlcy90b29saW5nLm1kIiwiY29udGVudCI6Ii0tLVxubmFtZTogdG9vbGluZ1xuZGVzY3JpcHRpb246IOW4uOeUqOW3peWFt+S4juWBj+WlvVxuLS0tXG4tIOacrOWcsOS8mOWFiO+8muiDveemu+e6v+i3keeahOW3peWFt+S8mOWFiOS6juS6keerr+acjeWKoVxuLSDljZXmlofku7bjgIHlj6/lj4zlh7vmiZPlvIDnmoTlsI/lt6XlhbfmnIDlkIjlv4PmhI9cbi0g6K6o5Y6M6ZyA6KaB5rOo5YaM6LSm5Y+35omN6IO96K+V55So55qE5Lic6KW/In1dfSwicHJvamVjdHMiOlt7InV1aWQiOiJwcm9qLTEiLCJuYW1lIjoi5Lqn5ZOB6K6+6K6h5Yqp5omLIiwiZGVzY3JpcHRpb24iOiLml6XluLjorr7orqHlt6XkvZznmoQgQUkg5Yqp5omLIiwiaXNfcHJpdmF0ZSI6dHJ1ZSwiaXNfc3RhcnRlcl9wcm9qZWN0IjpmYWxzZSwicHJvbXB0X3RlbXBsYXRlIjoi5L2g5piv5LiA5L2N6LWE5rex5Lqn5ZOB6K6+6K6h6aG+6Zeu77yM5Zue562U566A5rSB44CB57uZ57uT6K6644CB5b+F6KaB5pe26YWN5LiA5Y+l55CG55Sx44CCIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMDFUMDg6MDA6MDArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0xMFQwODowMDowMCswMDowMCIsImNyZWF0b3IiOnsidXVpZCI6ImRlbW8tdXNlciIsImZ1bGxfbmFtZSI6IuWwj+afr++8iOekuuS+i++8iSJ9LCJkb2NzIjpbeyJ1dWlkIjoiZG9jLTEiLCJmaWxlbmFtZSI6IuiuvuiuoeinhOiMgy5tZCIsImNvbnRlbnQiOiIjIOiuvuiuoeinhOiMg1xuXG4tIOS4u+iJsu+8muaaluapmSAjRDk3NzU3XG4tIOWchuinku+8mjEycHhcbi0g5Y6f5YiZ77ya55WZ55m95YWF6Laz44CB5bGC57qn5riF5pmwIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMDFUMDg6MDU6MDArMDA6MDAifV19XSwiY29udnMiOlt7InV1aWQiOiJjb252LWEiLCJuYW1lIjoi5LqM5qyh5pa556iL5LiO5Yik5Yir5byPIiwic3VtbWFyeSI6IiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTIwVDA5OjAwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMjBUMDk6MDM6MTYrMDA6MDAiLCJhY2NvdW50Ijp7InV1aWQiOiJkZW1vLXVzZXIifSwiY2hhdF9tZXNzYWdlcyI6W3sidXVpZCI6InU4NTE1NTgiLCJzZW5kZXIiOiJodW1hbiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTIwVDA5OjAwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMjBUMDk6MDA6MDArMDA6MDAiLCJ0ZXh0Ijoi5biu5oiR55So5YWs5byP6Kej6YeK5LiA5LiL5LqM5qyh5pa556iL55qE5rGC5qC55YWs5byPIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5biu5oiR55So5YWs5byP6Kej6YeK5LiA5LiL5LqM5qyh5pa556iL55qE5rGC5qC55YWs5byPIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTEzNjc4NiIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTIwVDA5OjAwOjEyKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMjBUMDk6MDA6MTIrMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRoaW5raW5nIiwidGhpbmtpbmciOiLnlKjmoIflh4YgTGFUZVgg5YaZ5Ye65YWs5byP5bm26Kej6YeK5Yik5Yir5byP77yM5L+d5oyB566A5rSB44CCIn0seyJ0eXBlIjoidGV4dCIsInRleHQiOiLkuozmrKHmlrnnqIsgJGF4XjIrYngrYz0wJO+8iCRhXFxuZXEgMCTvvInnmoTmsYLmoLnlhazlvI/mmK/vvJpcblxuJCR4ID0gXFxmcmFjey1iIFxccG0gXFxzcXJ0e2JeMi00YWN9fXsyYX0kJFxuXG7lhbbkuK0gJGJeMi00YWMkIOWPqyoq5Yik5Yir5byPKirvvIzorrDkvZwgJFxcRGVsdGEk44CCIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTcyMTcxMiIsInNlbmRlciI6Imh1bWFuIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMjBUMDk6MDE6MDArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0yMFQwOTowMTowMCswMDowMCIsInRleHQiOiLliKTliKvlvI/mnInku4DkuYjnlKgiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLliKTliKvlvI/mnInku4DkuYjnlKgifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1MjUzMTI0Iiwic2VuZGVyIjoiYXNzaXN0YW50IiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMjBUMDk6MDE6MjArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0yMFQwOTowMToyMCswMDowMCIsInRleHQiOiIiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLliKTliKvlvI8gJFxcRGVsdGE9Yl4yLTRhYyQg5Yaz5a6a5qC555qE5oOF5Ya177yaXG5cbi0gJFxcRGVsdGE+MCTvvJrkuKTkuKrkuI3lkIzlrp7moLlcbi0gJFxcRGVsdGE9MCTvvJrkuIDkuKrph43moLlcbi0gJFxcRGVsdGE8MCTvvJrkuKTkuKrlhbHova3lpI3moLkifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1Mjk5NDg1Iiwic2VuZGVyIjoiaHVtYW4iLCJjcmVhdGVkX2F0IjoiMjAyNi0wNi0yMFQwOTowMjowMCswMDowMCIsInVwZGF0ZWRfYXQiOiIyMDI2LTA2LTIwVDA5OjAyOjAwKzAwOjAwIiwidGV4dCI6IuS4vuS4qiDOlCDlsI/kuo4gMCDnmoTkvovlrZAiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLkuL7kuKogzpQg5bCP5LqOIDAg55qE5L6L5a2QIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTkyNzI5NiIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTIwVDA5OjAyOjE4KzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMjBUMDk6MDI6MTgrMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5q+U5aaCICR4XjIreCsxPTAk77yMJFxcRGVsdGE9MS00PS0zPDAk77yM6Kej5Li6ICR4PVxcZnJhY3stMVxccG1cXHNxcnR7M31cXCxpfXsyfSTjgIIifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1NTY2NjcxIiwic2VuZGVyIjoiaHVtYW4iLCJjcmVhdGVkX2F0IjoiMjAyNi0wNi0yMFQwOTowMzowMCswMDowMCIsInVwZGF0ZWRfYXQiOiIyMDI2LTA2LTIwVDA5OjAzOjAwKzAwOjAwIiwidGV4dCI6IumhuuS+v+iusuS4i+mfpui+vuWumueQhiIsImNvbnRlbnQiOlt7InR5cGUiOiJ0ZXh0IiwidGV4dCI6IumhuuS+v+iusuS4i+mfpui+vuWumueQhiJ9XSwiZmlsZXMiOltdLCJhdHRhY2htZW50cyI6W10sInBhcmVudF9tZXNzYWdlX3V1aWQiOm51bGx9LHsidXVpZCI6InUyMTA3MTQiLCJzZW5kZXIiOiJhc3Npc3RhbnQiLCJjcmVhdGVkX2F0IjoiMjAyNi0wNi0yMFQwOTowMzoxNiswMDowMCIsInVwZGF0ZWRfYXQiOiIyMDI2LTA2LTIwVDA5OjAzOjE2KzAwOjAwIiwidGV4dCI6IiIsImNvbnRlbnQiOlt7InR5cGUiOiJ0ZXh0IiwidGV4dCI6IuiuvuS4pOaguSAkeF8xLHhfMiTvvJokeF8xK3hfMj0tXFxmcmFje2J9e2F9JO+8jCR4XzEgeF8yPVxcZnJhY3tjfXthfSTjgIIifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfV19LHsidXVpZCI6ImNvbnYtYiIsIm5hbWUiOiLnlKjku6PnoIHlv6vpgJ/orqHnrpciLCJzdW1tYXJ5IjoiIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMThUMTQ6MDA6MDArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0xOFQxNDowMjoyMCswMDowMCIsImFjY291bnQiOnsidXVpZCI6ImRlbW8tdXNlciJ9LCJjaGF0X21lc3NhZ2VzIjpbeyJ1dWlkIjoidTI0MTQ1NSIsInNlbmRlciI6Imh1bWFuIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMThUMTQ6MDA6MDArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0xOFQxNDowMDowMCswMDowMCIsInRleHQiOiLluK7miJHnrpfkuIDkuIsgMSDliLAgMTAwIOaJgOacieaVtOaVsOeahOWSjCIsImNvbnRlbnQiOlt7InR5cGUiOiJ0ZXh0IiwidGV4dCI6IuW4ruaIkeeul+S4gOS4iyAxIOWIsCAxMDAg5omA5pyJ5pW05pWw55qE5ZKMIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTM3MjYxMSIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTE4VDE0OjAwOjIwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMThUMTQ6MDA6MjArMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRoaW5raW5nIiwidGhpbmtpbmciOiLnlKjmsYLlkozlhazlvI/vvIzlho3nlKjku6PnoIHpqozor4HjgIIifSx7InR5cGUiOiJ0b29sX3VzZSIsIm5hbWUiOiJyZXBsIiwiaW5wdXQiOnsiY29kZSI6InByaW50KHN1bShyYW5nZSgxLCAxMDEpKSkifX0seyJ0eXBlIjoidG9vbF9yZXN1bHQiLCJjb250ZW50IjoiNTA1MCJ9LHsidHlwZSI6InRleHQiLCJ0ZXh0IjoiMSDliLAgMTAwIOeahOWSjOaYryAqKjUwNTAqKuOAgueUqOWFrOW8j++8miRcXGZyYWN7bihuKzEpfXsyfT1cXGZyYWN7MTAwXFx0aW1lcyAxMDF9ezJ9PTUwNTAk44CCIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTM4Nzc3Iiwic2VuZGVyIjoiaHVtYW4iLCJjcmVhdGVkX2F0IjoiMjAyNi0wNi0xOFQxNDowMTowMCswMDowMCIsInVwZGF0ZWRfYXQiOiIyMDI2LTA2LTE4VDE0OjAxOjAwKzAwOjAwIiwidGV4dCI6IumCoyAxIOWIsCAxMDAwIOWRoiIsImNvbnRlbnQiOlt7InR5cGUiOiJ0ZXh0IiwidGV4dCI6IumCoyAxIOWIsCAxMDAwIOWRoiJ9XSwiZmlsZXMiOltdLCJhdHRhY2htZW50cyI6W10sInBhcmVudF9tZXNzYWdlX3V1aWQiOm51bGx9LHsidXVpZCI6InU3OTQzMCIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTE4VDE0OjAxOjE4KzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMThUMTQ6MDE6MTgrMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRvb2xfdXNlIiwibmFtZSI6InJlcGwiLCJpbnB1dCI6eyJjb2RlIjoicHJpbnQoc3VtKHJhbmdlKDEsIDEwMDEpKSkifX0seyJ0eXBlIjoidG9vbF9yZXN1bHQiLCJjb250ZW50IjoiNTAwNTAwIn0seyJ0eXBlIjoidGV4dCIsInRleHQiOiLmmK8gKio1MDA1MDAqKuOAgiJ9XSwiZmlsZXMiOltdLCJhdHRhY2htZW50cyI6W10sInBhcmVudF9tZXNzYWdlX3V1aWQiOm51bGx9LHsidXVpZCI6InU1MTc2MjYiLCJzZW5kZXIiOiJodW1hbiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTE4VDE0OjAyOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMThUMTQ6MDI6MDArMDA6MDAiLCJ0ZXh0Ijoi5YiX5Ye65YmNIDEwIOS4quaWkOazoumCo+WlkeaVsCIsImNvbnRlbnQiOlt7InR5cGUiOiJ0ZXh0IiwidGV4dCI6IuWIl+WHuuWJjSAxMCDkuKrmlpDms6LpgqPlpZHmlbAifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1NTY2NjY0Iiwic2VuZGVyIjoiYXNzaXN0YW50IiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMThUMTQ6MDI6MjArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0xOFQxNDowMjoyMCswMDowMCIsInRleHQiOiIiLCJjb250ZW50IjpbeyJ0eXBlIjoidG9vbF91c2UiLCJuYW1lIjoicmVwbCIsImlucHV0Ijp7ImNvZGUiOiJhLGI9MCwxO291dD1bXVxuZm9yIF8gaW4gcmFuZ2UoMTApOlxuIG91dC5hcHBlbmQoYSk7YSxiPWIsYStiXG5wcmludChvdXQpIn19LHsidHlwZSI6InRvb2xfcmVzdWx0IiwiY29udGVudCI6IlswLCAxLCAxLCAyLCAzLCA1LCA4LCAxMywgMjEsIDM0XSJ9LHsidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5YmNIDEwIOS4qu+8mmAwLCAxLCAxLCAyLCAzLCA1LCA4LCAxMywgMjEsIDM0YOOAgiJ9XSwiZmlsZXMiOltdLCJhdHRhY2htZW50cyI6W10sInBhcmVudF9tZXNzYWdlX3V1aWQiOm51bGx9XX0seyJ1dWlkIjoiY29udi1jIiwibmFtZSI6IuadreW3nuS4pOWkqeihjOeoiyIsInN1bW1hcnkiOiIiLCJjcmVhdGVkX2F0IjoiMjAyNi0wNi0xNVQyMDowMDowMCswMDowMCIsInVwZGF0ZWRfYXQiOiIyMDI2LTA2LTE1VDIwOjAyOjE2KzAwOjAwIiwiYWNjb3VudCI6eyJ1dWlkIjoiZGVtby11c2VyIn0sImNoYXRfbWVzc2FnZXMiOlt7InV1aWQiOiJ1MjYwNTUzIiwic2VuZGVyIjoiaHVtYW4iLCJjcmVhdGVkX2F0IjoiMjAyNi0wNi0xNVQyMDowMDowMCswMDowMCIsInVwZGF0ZWRfYXQiOiIyMDI2LTA2LTE1VDIwOjAwOjAwKzAwOjAwIiwidGV4dCI6Iui/meaYr+aIkeaVtOeQhueahOadreW3nuaZr+eCue+8jOW4ruaIkeaOkuS4qui9u+advueCueeahOS4pOWkqeihjOeoiyIsImNvbnRlbnQiOlt7InR5cGUiOiJ0ZXh0IiwidGV4dCI6Iui/meaYr+aIkeaVtOeQhueahOadreW3nuaZr+eCue+8jOW4ruaIkeaOkuS4qui9u+advueCueeahOS4pOWkqeihjOeoiyJ9XSwiZmlsZXMiOlt7ImZpbGVfbmFtZSI6IuihjOeoi+iNieeovy5wZGYiLCJmaWxlX3V1aWQiOiJkZW1vLWZpbGUtMSJ9XSwiYXR0YWNobWVudHMiOlt7ImZpbGVfbmFtZSI6IuaZr+eCuea4heWNlS50eHQiLCJmaWxlX3R5cGUiOiJ0eHQiLCJmaWxlX3NpemUiOiI5NiIsImV4dHJhY3RlZF9jb250ZW50Ijoi6KW/5rmWXG7ngbXpmpDlr7pcbuays+Wdiuihl1xu6KW/5rqq5rm/5ZywXG7ljZflrovlvqHooZcifV0sInBhcmVudF9tZXNzYWdlX3V1aWQiOm51bGx9LHsidXVpZCI6InU4Mjg4MTUiLCJzZW5kZXIiOiJhc3Npc3RhbnQiLCJjcmVhdGVkX2F0IjoiMjAyNi0wNi0xNVQyMDowMDoyNSswMDowMCIsInVwZGF0ZWRfYXQiOiIyMDI2LTA2LTE1VDIwOjAwOjI1KzAwOjAwIiwidGV4dCI6IiIsImNvbnRlbnQiOlt7InR5cGUiOiJ0ZXh0IiwidGV4dCI6Iue7meS9oOaOkuS6huS4quS4jei1tui3r+eahOS4pOWkqeeJiO+8mlxuXG4qKkRheSAx77yI6KW/5rmW54mH5Yy677yJKipcbi0g5LiK5Y2I77ya6KW/5rmW77yI5pat5qGl4oaS55m95aCk77yJXG4tIOS4i+WNiO+8mueBtemakOWvuiArIOmjnuadpeWzsFxuLSDlgo3mmZrvvJrmsrPlnYrooZflsI/lkINcblxuKipEYXkgMu+8iOiHqueEtuaFouiKguWlj++8iSoqXG4tIOS4iuWNiO+8muilv+a6qua5v+WcsOWdkOiIuVxuLSDkuIvljYjvvJrljZflrovlvqHooZfllp3ojLbmlLblsL4ifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1MTM1MjYiLCJzZW5kZXIiOiJodW1hbiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTE1VDIwOjAxOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMTVUMjA6MDE6MDArMDA6MDAiLCJ0ZXh0Ijoi56ys5LiA5aSp5oOz5YaN6L275p2+5Lqb77yM54G16ZqQ5a+65Y675o6JIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi56ys5LiA5aSp5oOz5YaN6L275p2+5Lqb77yM54G16ZqQ5a+65Y675o6JIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTQzODI2NCIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTE1VDIwOjAxOjIwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMTVUMjA6MDE6MjArMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5aW977yM56ys5LiA5aSp57K+566A5Li677ya6KW/5rmW5ryr5q2lIOKGkiDmuZbovrnlkpbllaHppobmrYfohJog4oaSIOays+Wdiuihl+aZmumlreOAgiJ9XSwiZmlsZXMiOltdLCJhdHRhY2htZW50cyI6W10sInBhcmVudF9tZXNzYWdlX3V1aWQiOm51bGx9LHsidXVpZCI6InUyMDI0OTAiLCJzZW5kZXIiOiJodW1hbiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTE1VDIwOjAyOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMTVUMjA6MDI6MDArMDA6MDAiLCJ0ZXh0Ijoi5rmW6L655ZKW5ZWh6aaG5pyJ5o6o6I2Q5ZCXIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5rmW6L655ZKW5ZWh6aaG5pyJ5o6o6I2Q5ZCXIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTcyNTgxOSIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTE1VDIwOjAyOjE2KzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMTVUMjA6MDI6MTYrMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5YyX5bGx6KGX5LiA5bim55qE54us56uL5ZKW5ZWh6aaG77yM6Zyy5Y+w6IO955yL5rmW77yM6YCC5ZCI5Y+R5ZGG44CCIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH1dfSx7InV1aWQiOiJjb252LWQiLCJuYW1lIjoi5Lit6K+R6Iux5ram6ImyIiwic3VtbWFyeSI6IiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTEyVDEwOjAwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMTJUMTA6MDE6MTArMDA6MDAiLCJhY2NvdW50Ijp7InV1aWQiOiJkZW1vLXVzZXIifSwiY2hhdF9tZXNzYWdlcyI6W3sidXVpZCI6InU2MzYzOTMiLCJzZW5kZXIiOiJodW1hbiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTEyVDEwOjAwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMTJUMTA6MDA6MDArMDA6MDAiLCJ0ZXh0Ijoi5oqK6L+Z5Y+l57+76K+R5oiQ5Zyw6YGT6Iux5paH77ya6L+Z5Liq5bel5YW36K6p5oiR55yB5LqG5b6I5aSa5pe26Ze0IiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5oqK6L+Z5Y+l57+76K+R5oiQ5Zyw6YGT6Iux5paH77ya6L+Z5Liq5bel5YW36K6p5oiR55yB5LqG5b6I5aSa5pe26Ze0In1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTUzMDQ3NSIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTEyVDEwOjAwOjEyKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMTJUMTA6MDA6MTIrMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5Yeg56eN6K+05rOV77yaXG4tIFRoaXMgdG9vbCBzYXZlcyBtZSBhIHRvbiBvZiB0aW1lLlxuLSBUaGlzIHRvb2wgaXMgYSByZWFsIHRpbWUtc2F2ZXIuXG5cbuWPo+ivremHjOesrOS6jOenjeabtOiHqueEtuOAgiJ9XSwiZmlsZXMiOltdLCJhdHRhY2htZW50cyI6W10sInBhcmVudF9tZXNzYWdlX3V1aWQiOm51bGx9LHsidXVpZCI6InU0MDAwNDMiLCJzZW5kZXIiOiJodW1hbiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTEyVDEwOjAxOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMTJUMTA6MDE6MDArMDA6MDAiLCJ0ZXh0Ijoi5pu05q2j5byP5LiA54K55ZGiIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5pu05q2j5byP5LiA54K55ZGiIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTI2NTc1NyIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTEyVDEwOjAxOjEwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMTJUMTA6MDE6MTArMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0IjoiKlRoaXMgdG9vbCBoYXMgc2lnbmlmaWNhbnRseSBpbXByb3ZlZCBteSBlZmZpY2llbmN5LioifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfV19LHsidXVpZCI6ImNvbnYtZSIsIm5hbWUiOiLoh6rmiJHku4vnu43mtqboibIiLCJzdW1tYXJ5IjoiIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMTBUMjE6MDA6MDArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0xMFQyMTowMDoxNCswMDowMCIsImFjY291bnQiOnsidXVpZCI6ImRlbW8tdXNlciJ9LCJjaGF0X21lc3NhZ2VzIjpbeyJ1dWlkIjoidTk1MDUyNSIsInNlbmRlciI6Imh1bWFuIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMTBUMjE6MDA6MDArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0xMFQyMTowMDowMCswMDowMCIsInRleHQiOiLluK7miJHmiorov5nmrrXoh6rmiJHku4vnu43mtqboibLlvpfmm7TnroDmtIHvvJrmiJHmmK/kuIDlkI3lgZrkuobkupTlubTnmoTkuqflk4Horr7orqHluIjvvIzlubPml7bllpzmrKLnoJTnqbblkITnp43mlYjnjoflt6XlhbciLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLluK7miJHmiorov5nmrrXoh6rmiJHku4vnu43mtqboibLlvpfmm7TnroDmtIHvvJrmiJHmmK/kuIDlkI3lgZrkuobkupTlubTnmoTkuqflk4Horr7orqHluIjvvIzlubPml7bllpzmrKLnoJTnqbblkITnp43mlYjnjoflt6XlhbcifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1MjIxNDQ1Iiwic2VuZGVyIjoiYXNzaXN0YW50IiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMTBUMjE6MDA6MTQrMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0xMFQyMTowMDoxNCswMDowMCIsInRleHQiOiIiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLjgIzkuqflk4Horr7orqHluIjvvIzkupTlubTnu4/pqozvvIzng63oobfmipjohb7mlYjnjoflt6XlhbfjgILjgI1cblxu5pu05a6M5pW054mI77ya44CM5oiR5piv5LiA5ZCN5pyJ5LqU5bm057uP6aqM55qE5Lqn5ZOB6K6+6K6h5biI77yM5bmz5pe25Zac5qyi56CU56m25pWI546H5bel5YW344CB5omT56Oo5bel5L2c5rWB44CC44CNIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH1dfSx7InV1aWQiOiJjb252LWYiLCJuYW1lIjoiUHl0aG9uIOe8qei/m+aKpemUmSIsInN1bW1hcnkiOiIiLCJjcmVhdGVkX2F0IjoiMjAyNi0wNi0wOFQxNjowMDowMCswMDowMCIsInVwZGF0ZWRfYXQiOiIyMDI2LTA2LTA4VDE2OjAxOjEyKzAwOjAwIiwiYWNjb3VudCI6eyJ1dWlkIjoiZGVtby11c2VyIn0sImNoYXRfbWVzc2FnZXMiOlt7InV1aWQiOiJ1MjMxMzUiLCJzZW5kZXIiOiJodW1hbiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTA4VDE2OjAwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMDhUMTY6MDA6MDArMDA6MDAiLCJ0ZXh0IjoiUHl0aG9uIOaKpemUmSBJbmRlbnRhdGlvbkVycm9yIOaYr+S7gOS5iOaEj+aAnSIsImNvbnRlbnQiOlt7InR5cGUiOiJ0ZXh0IiwidGV4dCI6IlB5dGhvbiDmiqXplJkgSW5kZW50YXRpb25FcnJvciDmmK/ku4DkuYjmhI/mgJ0ifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1ODIwMzY3Iiwic2VuZGVyIjoiYXNzaXN0YW50IiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMDhUMTY6MDA6MTYrMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0wOFQxNjowMDoxNiswMDowMCIsInRleHQiOiIiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLnvKnov5vplJnor6/jgIJQeXRob24g55So57yp6L+b5YiS5YiG5Luj56CB5Z2X77yM5bi46KeB5Y6f5Zug77yaXG5cbmBgYHB5dGhvblxuZGVmIGYoKTpcbnByaW50KCdoaScpICAgIyDinYwg5bCR5LqG57yp6L+bXG5gYGBcblxu5pS55oiQ77yaXG5cbmBgYHB5dGhvblxuZGVmIGYoKTpcbiAgICBwcmludCgnaGknKSAgIyDinIUg57yp6L+bIDQg56m65qC8XG5gYGBcblxu5Yir5re355SoIFRhYiDlkoznqbrmoLzjgIIifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1MTYwMjk3Iiwic2VuZGVyIjoiaHVtYW4iLCJjcmVhdGVkX2F0IjoiMjAyNi0wNi0wOFQxNjowMTowMCswMDowMCIsInVwZGF0ZWRfYXQiOiIyMDI2LTA2LTA4VDE2OjAxOjAwKzAwOjAwIiwidGV4dCI6IlZTQ29kZSDmgI7kuYjnu5/kuIDmiJDnqbrmoLwiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiJWU0NvZGUg5oCO5LmI57uf5LiA5oiQ56m65qC8In1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTcwMDkwNSIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTA4VDE2OjAxOjEyKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMDhUMTY6MDE6MTIrMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5bqV6YOo54q25oCB5qCP54K544CMU3BhY2VzIC8gVGFi44CN4oaSIOmAiSAqQ29udmVydCBJbmRlbnRhdGlvbiB0byBTcGFjZXMq77yM5bm25oqKIFRhYiBTaXplIOiuvuS4uiA044CCIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH1dfSx7InV1aWQiOiJjb252LWciLCJuYW1lIjoi5LiJ5YiG5YyW5YGl6Lqr6K6h5YiSIiwic3VtbWFyeSI6IiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTA1VDA3OjMwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMDVUMDc6MzA6MjArMDA6MDAiLCJhY2NvdW50Ijp7InV1aWQiOiJkZW1vLXVzZXIifSwiY2hhdF9tZXNzYWdlcyI6W3sidXVpZCI6InUyODUzMTkiLCJzZW5kZXIiOiJodW1hbiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTA1VDA3OjMwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMDVUMDc6MzA6MDArMDA6MDAiLCJ0ZXh0Ijoi5biu5oiR5Yi25a6a5LiA5Liq5paw5omL5LiJ5YiG5YyW5YGl6Lqr6K6h5YiSIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5biu5oiR5Yi25a6a5LiA5Liq5paw5omL5LiJ5YiG5YyW5YGl6Lqr6K6h5YiSIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTI1MjQ3NiIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA2LTA1VDA3OjMwOjIwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDYtMDVUMDc6MzA6MjArMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0IjoiKirkuInliIbljJbvvIjnu4PkuIDkvJHkuIDlj4vlpb3niYjvvIkqKlxuLSBEYXkgQSDog7gr5LiJ5aS077ya5Y2n5o6o44CB5LiK5pac5ZOR6ZOD44CB57uz57Si5LiL5Y6LXG4tIERheSBCIOiDjCvkuozlpLTvvJrlvJXkvZMv6auY5L2N5LiL5ouJ44CB5YiS6Ii544CB5byv5Li+XG4tIERheSBDIOiFvyvogqnvvJrmt7HoubLjgIHohb/kuL7jgIHmjqjkuL7jgIHkvqflubPkuL5cblxu5q+P5Liq5Yqo5L2cIDMg57uEIMOXIDjigJMxMiDmrKHvvIzmlrDmiYvlhYjmiorliqjkvZzlgZrmoIflh4bjgIIifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfV19LHsidXVpZCI6ImNvbnYtaCIsIm5hbWUiOiLpuKHog7jogonoj5zosLEiLCJzdW1tYXJ5IjoiIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMDJUMTg6MzA6MDArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0wMlQxODozMDoxOCswMDowMCIsImFjY291bnQiOnsidXVpZCI6ImRlbW8tdXNlciJ9LCJjaGF0X21lc3NhZ2VzIjpbeyJ1dWlkIjoidTIyNTc2MSIsInNlbmRlciI6Imh1bWFuIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMDJUMTg6MzA6MDArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0wMlQxODozMDowMCswMDowMCIsInRleHQiOiLnlKjpuKHog7jogonlgZrlh6DpgZPnroDljZXnmoToj5wiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLnlKjpuKHog7jogonlgZrlh6DpgZPnroDljZXnmoToj5wifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1MTg4MDIxIiwic2VuZGVyIjoiYXNzaXN0YW50IiwiY3JlYXRlZF9hdCI6IjIwMjYtMDYtMDJUMTg6MzA6MTgrMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNi0wMlQxODozMDoxOCswMDowMCIsInRleHQiOiIiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLkuInpgZPlpb3kuIrmiYvnmoTvvJpcbjEuICoq6buR5qSS6bih6IO4KirvvJrliIfniYfohYwgMTAg5YiG6ZKf77yM54WO5Yiw5b6u54Sm77yM5pKS6buR5qSS44CCXG4yLiAqKum4oeiDuOaymeaLiSoq77ya54Wu54af5pKV5LidICsg55Sf6I+c546J57GzICsg5rK56YaL5rGB44CCXG4zLiAqKueFp+eDp+m4oeiDuCoq77ya54WO5ZCO5reL54Wn54On5rGB5pS25rGB44CCIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH1dfSx7InV1aWQiOiJjb252LWkiLCJuYW1lIjoi44CK5Y6f5YiZ44CL6K+75Lmm56yU6K6wIiwic3VtbWFyeSI6IiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA1LTI4VDIyOjAwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDUtMjhUMjI6MDA6MjArMDA6MDAiLCJhY2NvdW50Ijp7InV1aWQiOiJkZW1vLXVzZXIifSwiY2hhdF9tZXNzYWdlcyI6W3sidXVpZCI6InU0NTE2NSIsInNlbmRlciI6Imh1bWFuIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDUtMjhUMjI6MDA6MDArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNS0yOFQyMjowMDowMCswMDowMCIsInRleHQiOiLluK7miJHmiorjgIrljp/liJnjgIvov5nmnKzkuabnmoTmoLjlv4Pop4LngrnmgLvnu5PmiJDkuInmnaEiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLluK7miJHmiorjgIrljp/liJnjgIvov5nmnKzkuabnmoTmoLjlv4Pop4LngrnmgLvnu5PmiJDkuInmnaEifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfSx7InV1aWQiOiJ1Mzg1ODExIiwic2VuZGVyIjoiYXNzaXN0YW50IiwiY3JlYXRlZF9hdCI6IjIwMjYtMDUtMjhUMjI6MDA6MjArMDA6MDAiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNS0yOFQyMjowMDoyMCswMDowMCIsInRleHQiOiIiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiIxLiAqKuaLpeaKseeOsOWunuOAgeebtOmdoumXrumimCoq77ya55eb6IumICsg5Y+N5oCdID0g6L+b5q2l44CCXG4yLiAqKuaegeW6puaxguecn+OAgeaegeW6pumAj+aYjioq77ya5oqK5YiG5q2n5pGG5Yiw5Y+w6Z2i5LiK6Kej5Yaz44CCXG4zLiAqKueUqOWOn+WImeWMluWGs+etlioq77ya5oqK5Y+N5aSN5Ye6546w55qE5oOF5Ya15rKJ5reA5oiQ5Y+v5aSN55So55qE5Y6f5YiZ44CCIn1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH1dfSx7InV1aWQiOiJjb252LWoiLCJuYW1lIjoi5q2j5oCB5YiG5biD5YWs5byPIiwic3VtbWFyeSI6IiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA1LTI1VDExOjAwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDUtMjVUMTE6MDA6MTYrMDA6MDAiLCJhY2NvdW50Ijp7InV1aWQiOiJkZW1vLXVzZXIifSwiY2hhdF9tZXNzYWdlcyI6W3sidXVpZCI6InU5NjY4NzAiLCJzZW5kZXIiOiJodW1hbiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA1LTI1VDExOjAwOjAwKzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDUtMjVUMTE6MDA6MDArMDA6MDAiLCJ0ZXh0Ijoi5q2j5oCB5YiG5biD55qE5qaC546H5a+G5bqm5Ye95pWw6ZW/5LuA5LmI5qC3IiwiY29udGVudCI6W3sidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5q2j5oCB5YiG5biD55qE5qaC546H5a+G5bqm5Ye95pWw6ZW/5LuA5LmI5qC3In1dLCJmaWxlcyI6W10sImF0dGFjaG1lbnRzIjpbXSwicGFyZW50X21lc3NhZ2VfdXVpZCI6bnVsbH0seyJ1dWlkIjoidTIxMDgzMyIsInNlbmRlciI6ImFzc2lzdGFudCIsImNyZWF0ZWRfYXQiOiIyMDI2LTA1LTI1VDExOjAwOjE2KzAwOjAwIiwidXBkYXRlZF9hdCI6IjIwMjYtMDUtMjVUMTE6MDA6MTYrMDA6MDAiLCJ0ZXh0IjoiIiwiY29udGVudCI6W3sidHlwZSI6InRoaW5raW5nIiwidGhpbmtpbmciOiLnu5nlh7rmoIflh4YgUERGIOWFrOW8j+W5tuivtOaYjuWPguaVsOOAgiJ9LHsidHlwZSI6InRleHQiLCJ0ZXh0Ijoi5q2j5oCB5YiG5biDICROKFxcbXUsXFxzaWdtYV4yKSQg55qE5qaC546H5a+G5bqm5Ye95pWw77yaXG5cbiQkZih4KT1cXGZyYWN7MX17XFxzaWdtYVxcc3FydHsyXFxwaX19XFwsZV57LVxcZnJhY3soeC1cXG11KV4yfXsyXFxzaWdtYV4yfX0kJFxuXG7lhbbkuK0gJFxcbXUkIOaYr+Wdh+WAvOOAgSRcXHNpZ21hJCDmmK/moIflh4blt67jgIIifV0sImZpbGVzIjpbXSwiYXR0YWNobWVudHMiOltdLCJwYXJlbnRfbWVzc2FnZV91dWlkIjpudWxsfV19XSwicmVmbGVjdGlvbnMiOnsiYWNjb3VudF91dWlkIjoiZGVtby11c2VyIiwiZmVlZGJhY2siOltdLCJyZWZsZWN0aW9ucyI6W3sicGVyaW9kIjoiMjAyNi0wNiIsImNvbnRlbnQiOnsicGVyaW9kIjoiMjAyNiDlubQgNiDmnIgiLCJoZXJvX3RpdGxlIjoi5oqK5oOz5rOV56Oo5oiQ6IO95Lqk5LuY55qE5Lic6KW/44CCIiwiaGVyb19ib2R5Ijoi6L+Z5Liq5pyI5aSn6YOo5YiG5pe26Ze06Iqx5Zyo5omT56Oo5LiK4oCU4oCU5oqK5LiA54mI57KX57OZ55qE6K6+6K6h56i/5pS55oiQ6IO96L+b6K+E5a6h55qE5pa55qGI77yM5oqK5pWj6JC955qE5pWI546H5bel5YW35pW055CG5oiQ6IO957uZ5Yir5Lq655So55qE5b2i5oCB44CC5L2g5Lmg5oOv5YWI55So5LiA5pW05q615pe26Ze05oqK6LWE5paZ5LiA5qyh5oCn6Zeu5riF5qWa77yM5YaN6Ieq5bex5YGa5Yaz5a6a77ybQ2xhdWRlIOabtOWkmuaYr+WcqOWBmuajgOe0ouWSjOWIneeov++8jOWIpOaWreWni+e7iOWcqOS9oOaJi+S4iuOAgiIsInN0YXRzIjpbeyJsYWJlbCI6IuWvueivneaVsCIsIm4iOiIxMCIsInN1YmxhYmVsIjoi5YiG5biD5ZyoIDgg5Liq5rS76LeD5pelIn0seyJsYWJlbCI6IuWNleasoeS8muivneS4reS9jeaVsCIsIm4iOiLnuqYgMiDlsI/ml7YiLCJzdWJsYWJlbCI6IjExOCDliIbpkp8ifSx7ImxhYmVsIjoi5pyA5rS76LeD5pe25q61IiwibiI6IuWRqOS4iSIsInN1YmxhYmVsIjoi5LiK5Y2IIDEwIOeCueWJjeWQjiJ9XSwidG9waWNzIjpbeyJ0aXRsZSI6IuS6p+WTgeiuvuiuoeS4juivhOWuoSIsInBlcmNlbnQiOjM4LCJkZXNjcmlwdGlvbiI6IumhtemdouS/oeaBr+WvhuW6puOAgeWNoeeJh+eyvueugOOAgUFJIOaooeWdl+eahOS6pOS6kuaWh+ahiCJ9LHsidGl0bGUiOiLmlbDlrabkuI7ku6PnoIHmsYLop6MiLCJwZXJjZW50IjoyNywiZGVzY3JpcHRpb24iOiLkuozmrKHmlrnnqIvliKTliKvlvI/jgIHmsYLlkozkuI7mlpDms6LpgqPlpZHvvIznlKjku6PnoIHkuqTlj4npqozor4Hnu5PmnpwifSx7InRpdGxlIjoi6KGM56iL5LiO55Sf5rS75a6J5o6SIiwicGVyY2VudCI6MjEsImRlc2NyaXB0aW9uIjoi5p2t5bee5Lik5aSp6L275p2+54mI6KGM56iL44CB5ZKW5ZWh6aaG5LiO5pma6aWt55qE5Y+W6IiNIn0seyJ0aXRsZSI6IuaWh+ahiOS4jue/u+ivkSIsInBlcmNlbnQiOjE0LCJkZXNjcmlwdGlvbiI6IuS4reivkeiLseeahOWcsOmBk+ivtOazleOAgeiHquaIkeS7i+e7jeeahOa2puiJsiJ9XSwiYWJvdXRfeW91cl90aW1lIjpbeyJ0aXRsZSI6IuS9oOeahOaPkOmXruaAu+aYr+W4puedgOe6puadn+adoeS7tuOAgiIsImJvZHkiOiLml6DorrrmmK/mjpLooYznqIvov5jmmK/mlLnorr7orqHvvIzkvaDpg73kvJrlhYjor7TmuIXjgIzopoHovbvmnb7jgI3jgIzopoHmm7TntKflh5HjgI3ov5nnsbvovrnnlYzvvIzogIzkuI3mmK/orqnlr7nmlrnoh6rnlLHlj5HmjKXigJTigJTnnIHmjonkuoblpKfph4/mnaXlm57jgIIifSx7InRpdGxlIjoi6aqM6K+B5oSP6K+G5b6I5by644CCIiwiYm9keSI6IumXruaxguWSjOWFrOW8j+aXtuS9oOS8mumhuuaJi+imgeS4gOasoeS7o+eggemqjOeul++8jOmXrue/u+ivkeaXtuS8mui/vemXruOAjOabtOato+W8j+S4gOeCueWRouOAje+8jOW+iOWwkeWBnOWcqOesrOS4gOS4quetlOahiOS4iuOAgiJ9XSwiZXhwYW5kaW5nX3lvdXJfc2tpbGxzIjpbeyJza2lsbCI6Iue7k+aehOWMluaPkOmXriIsInRpdGxlIjoi5YWI57uZ6IOM5pmv5ZKM6ZmQ5Yi277yM5YaN5o+Q6KaB5rGC44CCIiwiYm9keSI6IuaOkuadreW3nuihjOeoi+aXtuS9oOWFiOivtOaYjuOAjOi/meaYr+aIkeaVtOeQhueahOaZr+eCueOAjeWGjeimgeaxguOAjOi9u+advueCueOAje+8jOW+l+WIsOeahOaWueahiOS4jemcgOimgei/lOW3peOAgiJ9LHsic2tpbGwiOiLkuqTlj4npqozor4EiLCJ0aXRsZSI6IumHjeimgee7k+iuuuS4gOWumuimgeesrOS6jOenjeaWueW8j+ehruiupOOAgiIsImJvZHkiOiLmlbDlrabpopjmi7/ku6PnoIHot5HkuIDpgY3jgIHnv7vor5HopoHkuKTnp43or7Tms5Xlr7nmr5TvvIzov5nkuKrkuaDmg6/kvJrorqnnu5Porrrmm7TnqLPjgIIifV0sIndvcnRoX3RoaW5raW5nX2Fib3V0IjpbeyJ0aXRsZSI6IuaVtOeQhuW+l+W+iOe7hu+8jOaUtuWwvueVpeaFouOAgiIsImJvZHkiOiLorr7orqHmlrnmoYjlkozooYznqIvpg73lgZrliLDkuoblj6/miafooYznmoTnqIvluqbvvIzkvYblkI7nu63mmK/lkKbokL3lnLDlvojlsJHlho3mj5DotbfjgILmiorjgIzmlbTnkIblrozjgI3lkozjgIzlj5Hlh7rljrvjgI3lvZPmiJDkuKTku7bkuovmnaXlronmjpLvvIzlj6/og73kvJrmm7TpobrjgIIifV19fV19LCJsb2dpbkhpc3RvcnkiOlt7ImFjY291bnRfdXVpZCI6ImRlbW8tdXNlciIsInRpbWVzdGFtcCI6IjIwMjYtMDYtMjBUMDk6MTI6MDQrMDA6MDAiLCJpcF9hZGRyZXNzIjoiMjAzLjAuMTEzLjI0IiwibWV0aG9kIjoiZ29vZ2xlIiwidXNlcl9hZ2VudCI6eyJicm93c2VyX2ZhbWlseSI6IkNocm9tZSIsImJyb3dzZXJfdmVyc2lvbiI6IjE0Ni4wLjAiLCJvc19mYW1pbHkiOiJtYWNPUyIsIm9zX3ZlcnNpb24iOiIxNSJ9LCJsb2NhdGlvbl9pbmZvIjp7ImNvdW50cnkiOiJDTiIsInJlZ2lvbiI6IlNoYW5naGFpIiwiY2l0eSI6IlNoYW5naGFpIn19LHsiYWNjb3VudF91dWlkIjoiZGVtby11c2VyIiwidGltZXN0YW1wIjoiMjAyNi0wNi0xMlQyMjo0MTozNyswMDowMCIsImlwX2FkZHJlc3MiOiIyMDMuMC4xMTMuMjQiLCJtZXRob2QiOiJnb29nbGUiLCJ1c2VyX2FnZW50Ijp7ImJyb3dzZXJfZmFtaWx5IjoiU2FmYXJpIiwiYnJvd3Nlcl92ZXJzaW9uIjoiMTguNCIsIm9zX2ZhbWlseSI6ImlPUyIsIm9zX3ZlcnNpb24iOiIxOCJ9LCJsb2NhdGlvbl9pbmZvIjp7ImNvdW50cnkiOiJDTiIsInJlZ2lvbiI6IlNoYW5naGFpIiwiY2l0eSI6IlNoYW5naGFpIn19LHsiYWNjb3VudF91dWlkIjoiZGVtby11c2VyIiwidGltZXN0YW1wIjoiMjAyNi0wNi0wMlQxODowNToxMSswMDowMCIsImlwX2FkZHJlc3MiOiIxOTguNTEuMTAwLjciLCJtZXRob2QiOiJlbWFpbCIsInVzZXJfYWdlbnQiOnsiYnJvd3Nlcl9mYW1pbHkiOiJFZGdlIiwiYnJvd3Nlcl92ZXJzaW9uIjoiMTQ1LjAuMCIsIm9zX2ZhbWlseSI6IldpbmRvd3MiLCJvc192ZXJzaW9uIjoiMTEifSwibG9jYXRpb25faW5mbyI6eyJjb3VudHJ5IjoiQ04iLCJyZWdpb24iOiJaaGVqaWFuZyIsImNpdHkiOiJIYW5nemhvdSJ9fV19"),function(c){return c.charCodeAt(0)})));
 document.title='Claude 数据查看器 '+APP_VERSION;
 document.addEventListener('DOMContentLoaded',()=>{const b=document.getElementById('ver-badge');if(b)b.textContent=APP_VERSION;});
-if(typeof marked!=='undefined')marked.setOptions({breaks:true,gfm:true});
+if(typeof marked!=='undefined'){marked.setOptions({breaks:true,gfm:true});cvConfigureMarkdown();}
 
 // ── STATE ──────────────────────────────────────────────
 let appData={convs:[],projects:[],memories:null,account:null,globalMemory:null,reflections:null,loginHistory:null};
@@ -2481,6 +2501,8 @@ function msgText(m){
   if(m.text&&m.text.trim())return m.text;
   const s=(m.content||[]).map(b=>b.text||b.thinking||'').join('');
   if(s.trim())return s;
+  if((m.content||[]).some(b=>['image','document','redacted_thinking','injected_prompt_block','notice'].includes(b.type)))
+    return(m.content||[]).map(b=>b.prompt||b.text||b.title||'['+b.type+']').join(' ');
   // v5.6: 纯工具消息（Claude Code 常见）——给一个廉价的非空标记，避免被过滤掉
   if((m.content||[]).some(b=>b.type==='tool_use'||b.type==='tool_result'))
     return(m.content||[]).map(b=>b.type==='tool_use'?('🔧'+(b.name||'')):(b.type==='tool_result'?'↩':'')).join(' ');
@@ -2506,6 +2528,7 @@ function openConv(uuid,callback){
   const _t=raw.name||raw.summary||'（无标题对话）';
   if(raw._cc){const k=raw._cc.tokens;detailTitle.innerHTML=esc(_t)+` <span class="cc-tok">↑${fmtTok(k.in)} ↓${fmtTok(k.out)}${k.cacheR?' ⚡'+fmtTok(k.cacheR):''}</span>`;}
   else detailTitle.textContent=_t;
+  detailTitle.title=raw._cc?.malformed?raw._cc.malformed+' 行日志无法解析，已保留其余可读取的记录':'';
   clearSearch();initVS();showDetail(true);vp.scrollTop=0;
   toggleSrchSidebar(false);updateScrollBtns();buildNavRail();
   // v6.0: 这 150ms 内用户可能已切走，不校验会跳到错误位置
@@ -2622,8 +2645,120 @@ function updateScrollBtns(){
 scrollTopBtn.addEventListener('click',()=>vp.scrollTo({top:0,behavior:'smooth'}));
 scrollBottomBtn.addEventListener('click',()=>vp.scrollTo({top:vp.scrollHeight,behavior:'smooth'}));
 
+// ── SHARED TRANSCRIPT RENDERING ──
+function cvLiteralNotation(text){
+  // Escaped and unescaped Miller indices must survive both Markdown and TeX.
+  return String(text||'').replace(/\\?\[([\d\s\-\u0304\u0305]+)\\?\]\\?\(([\d\s\-\u0304\u0305]+)\\?\)/g,'[$1]($2)');
+}
+function cvSafeHref(href){
+  const value=String(href||'').trim();
+  if(/[\u0000-\u001f\u007f]/.test(value))return'';
+  if(/^(?:https?:|mailto:|file:)/i.test(value))return value;
+  if(/^[a-z][a-z\d+.-]*:/i.test(value)&&!/^\w[\w.-]*:\d/.test(value))return'';
+  if(value.startsWith('//'))return'';
+  return value;
+}
+function cvMathHTML(tex,display,raw){
+  try{return katex.renderToString(tex,{displayMode:display,throwOnError:true,trust:false,maxExpand:1000,strict:'ignore'});}
+  catch{return'<span class="math-fallback">'+esc(raw||tex)+'</span>';}
+}
+function cvMathToken(src,block){
+  const delimiters=block?[['$$','$$'],['\\[','\\]']]:[['$$','$$'],['\\(','\\)'],['\\[','\\]'],['$','$']];
+  for(const[left,right]of delimiters){
+    if(!src.startsWith(left))continue;
+    for(let end=left.length;(end=src.indexOf(right,end))>=0;end+=right.length){
+      if(src[end-1]==='\\')continue;
+      const tex=src.slice(left.length,end);if(!tex.trim())break;
+      if(left==='$'&&(/\n/.test(tex)||/^\s|\s$/.test(tex)||/^\d/.test(src[end+1]||'')))break;
+      const raw=src.slice(0,end+right.length);
+      return{type:block?'cvMathBlock':'cvMath',raw,tex,display:block||left==='$$'||left==='\\['};
+    }
+  }
+}
+function cvConfigureMarkdown(){
+  const renderer=new marked.Renderer();
+  renderer.html=source=>esc(source);
+  renderer.link=(href,title,text)=>{
+    if(/^[\d\s\-\u0304\u0305]+$/.test(href||''))return'['+text+']('+esc(href)+')';
+    const safe=cvSafeHref(href);if(!safe)return text;
+    return'<a href="'+esc(safe)+'"'+(title?' title="'+esc(title)+'"':'')+' rel="noreferrer noopener">'+text+'</a>';
+  };
+  renderer.image=(href,title,text)=>{
+    if(/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z\d+/=\s]+$/i.test(href||''))return'<img loading="lazy" src="'+esc(href)+'" alt="'+esc(text)+'">';
+    return'<span class="file-pill">图片：'+esc(text||href||'未提供图像')+'</span>';
+  };
+  renderer.code=(code,language)=>/^(?:math|latex|tex)$/i.test((language||'').trim())?cvMathHTML(code,true,code):'<pre><code'+(language?' class="language-'+esc(language.split(/\s/)[0])+'"':'')+'>'+esc(code)+'</code></pre>\n';
+  marked.use({renderer,extensions:[
+    {name:'cvMathBlock',level:'block',start:src=>{const i=src.search(/(?:\$\$|\\\[)/);return i<0?undefined:i;},tokenizer:src=>cvMathToken(src,true),renderer:t=>'<div class="math-display">'+cvMathHTML(t.tex,true,t.raw)+'</div>\n'},
+    {name:'cvMath',level:'inline',start:src=>{const i=src.search(/[$]|\\[([]/);return i<0?undefined:i;},tokenizer:src=>cvMathToken(src,false),renderer:t=>cvMathHTML(t.tex,t.display,t.raw)}
+  ]});
+}
+function renderMarkdownHTML(text){try{return marked.parse(cvLiteralNotation(replaceUnsupportedBlocks(text)));}catch{return'<p>'+esc(text).replace(/\n/g,'<br>')+'</p>';}}
+function cvIsActivity(b){return['thinking','redacted_thinking','tool_use','tool_result','injected_prompt_block','notice'].includes(b.type);}
+function cvActivityLabel(blocks){
+  const thoughts=blocks.filter(b=>b.type==='thinking'||b.type==='redacted_thinking').length;
+  const calls=blocks.filter(b=>b.type==='tool_use').length;
+  const errors=blocks.filter(b=>b.type==='tool_result'&&b.is_error).length;
+  const labels=[];if(thoughts)labels.push(thoughts+' 段思考');if(calls)labels.push(calls+' 次工具调用');if(errors)labels.push(errors+' 次错误');
+  if(!labels.length)labels.push(blocks.some(b=>b.type==='tool_result')?'工具结果':'客户端记录');
+  return'思考过程与工具活动 · '+labels.join(' · ');
+}
+function cvToolLabel(b){
+  const input=b.input||{};const hint=input.description||input.file_path||input.path||input.command||'';
+  return'工具调用：'+(b.name||'工具')+(hint?' · '+String(hint).split('\n')[0].slice(0,100):'');
+}
+function cvActivityEntry(b){
+  const row=document.createElement('details');row.className='activity-entry '+(b.is_error?'activity-error':'');
+  const summary=document.createElement('summary');
+  if(b.type==='thinking'||b.type==='redacted_thinking')summary.textContent='思考过程'+(b.type==='redacted_thinking'?'（日志未提供正文）':'');
+  else if(b.type==='tool_use')summary.textContent=cvToolLabel(b);
+  else if(b.type==='tool_result')summary.textContent='工具结果'+(b.name?'：'+b.name:'')+(b.is_error?'（错误）':'');
+  else summary.textContent=b.type==='notice'?'会话状态':'客户端注入内容';
+  row.appendChild(summary);
+  const body=document.createElement('div');body.className='activity-content';
+  if(b.type==='thinking')body.innerHTML=renderMarkdownHTML(b.thinking||'（日志未保存思考正文）');
+  else if(b.type==='redacted_thinking')body.textContent='此片段已由来源隐藏，无法从日志恢复。';
+  else if(b.type==='tool_use'||b.type==='tool_result'){
+    const pre=document.createElement('pre');pre.textContent=b.type==='tool_use'?toolInputText(b):toolResultText(b);body.appendChild(pre);
+  }else body.textContent=b.prompt||b.text||'';
+  row.appendChild(body);row.addEventListener('toggle',()=>reflowMsgHeight(row));return row;
+}
+function buildActivity(blocks,eager=false){
+  const wrap=document.createElement('details');wrap.className='activity-group';
+  const summary=document.createElement('summary');summary.textContent=cvActivityLabel(blocks);wrap.appendChild(summary);
+  const body=document.createElement('div');body.className='activity-list';wrap.appendChild(body);let loaded=false;
+  const load=()=>{if(loaded)return;loaded=true;blocks.forEach(b=>body.appendChild(cvActivityEntry(b)));};
+  if(eager)load();wrap.addEventListener('toggle',()=>{if(wrap.open)load();reflowMsgHeight(wrap);});return wrap;
+}
+function cvAppendContent(inner,msg,exporting=false){
+  const blocks=(msg.content||[]).length?msg.content:[{type:'text',text:msg.text||''}];
+  let activity=[];
+  const flush=()=>{if(activity.length){inner.appendChild(buildActivity(activity,exporting));activity=[];}};
+  for(const b of blocks){
+    if(cvIsActivity(b)){activity.push(b);continue;}flush();
+    if(b.type==='text'&&b.text?.trim()){
+      const bubble=document.createElement('div');bubble.className='bubble '+(msg.sender==='human'?'human':'assistant');
+      bubble.innerHTML=renderMarkdownHTML(b.text);if(!exporting)enhanceCodeBlocks(bubble);inner.appendChild(bubble);
+    }else if(b.type==='image'){
+      const image=document.createElement('div');image.className='bubble attachment-image';
+      const src=b.source||{};const uri=src.type==='base64'&&/^image\/(png|jpeg|gif|webp)$/.test(src.media_type||'')?'data:'+src.media_type+';base64,'+src.data:'';
+      if(uri){const img=document.createElement('img');img.src=uri;img.alt='图片输入';img.loading='lazy';img.addEventListener('load',()=>reflowMsgHeight(image));image.appendChild(img);}else image.textContent='[图片：日志未包含可离线显示的图像]';
+      inner.appendChild(image);
+    }else if(b.type==='document'){
+      const note=document.createElement('div');note.className='file-pill';note.textContent='附件：'+(b.title||b.source?.media_type||'文档');inner.appendChild(note);
+    }else if(b.type){
+      const detail=document.createElement('details');detail.className='activity-group';
+      const label=document.createElement('summary');label.textContent='其他内容：'+b.type;detail.appendChild(label);
+      const pre=document.createElement('pre');const safe={...b};delete safe.signature;delete safe.data;
+      pre.textContent=JSON.stringify(safe,null,2);detail.appendChild(pre);inner.appendChild(detail);
+    }
+  }
+  flush();
+}
+// ── END SHARED TRANSCRIPT RENDERING ──
+
 // ── BUILD MESSAGE ──────────────────────────────────────
-function buildMsg(msg,idx){
+function buildMsg(msg,idx,options={}){
   const isH=msg.sender==='human';
   const wrap=document.createElement('div');wrap.className='msg-wrap '+(isH?'human':'assistant');
   wrap.dataset.idx=idx;
@@ -2635,33 +2770,15 @@ function buildMsg(msg,idx){
   const ts=document.createElement('span');ts.textContent=fmtFull(msg.created_at||'');
   if(isH){meta.appendChild(ts);meta.appendChild(sl);}
   else{meta.appendChild(sl);meta.appendChild(ts);}
+  if(msg._final){const state=document.createElement('span');state.className='badge green';state.textContent='最终回复';meta.appendChild(state);}
   inner.appendChild(meta);
-  // Thinking
-  if(!isH)(msg.content||[]).filter(b=>b.type==='thinking').forEach(b=>inner.appendChild(buildThinking(b)));
-  // v5.3: 工具 / MCP 调用块（tool_use / tool_result）
-  (msg.content||[]).filter(b=>b.type==='tool_use'||b.type==='tool_result').forEach(b=>inner.appendChild(buildToolBlock(b)));
-  // v6.0: 平台注入的系统提示（如开启 Advanced Research），用户没写过，默认折叠
-  (msg.content||[]).filter(b=>b.type==='injected_prompt_block').forEach(b=>inner.appendChild(buildInjected(b)));
-  // Text bubble
-  let textContent=(msg.content||[]).filter(b=>b.type==='text').map(b=>b.text||'').join('\n').trim()||msg.text||'';
-  textContent=replaceUnsupportedBlocks(textContent);
-  if(textContent.trim()){
-    const bubble=document.createElement('div');bubble.className='bubble '+(isH?'human':'assistant');
-    if(isH){bubble.innerHTML=esc(textContent).replace(/\n/g,'<br>');renderLatex(bubble);}
-    else try{bubble.innerHTML=marked.parse(textContent);enhanceCodeBlocks(bubble);renderLatex(bubble);}catch{bubble.textContent=textContent;}
-    inner.appendChild(bubble);
-    // v5.1: 复制按钮
+  cvAppendContent(inner,msg,!!options.exporting);
+  const textContent=(msg.content||[]).filter(b=>b.type==='text').map(b=>b.text||'').join('\n').trim()||msg.text||'';
+  if(textContent.trim()&&!options.exporting){
     const actions=document.createElement('div');actions.className='msg-actions';
     const copyBtn=document.createElement('button');copyBtn.className='action-btn';copyBtn.textContent='📋 复制';
-    copyBtn.addEventListener('click',e=>{
-      e.stopPropagation();
-      navigator.clipboard.writeText(textContent).then(()=>{
-        copyBtn.textContent='✅ 已复制';copyBtn.classList.add('done');
-        setTimeout(()=>{copyBtn.textContent='📋 复制';copyBtn.classList.remove('done');},1500);
-      }).catch(()=>{copyBtn.textContent='❌ 失败';setTimeout(()=>copyBtn.textContent='📋 复制',1500);});
-    });
-    actions.appendChild(copyBtn);
-    inner.appendChild(actions);
+    copyBtn.addEventListener('click',()=>{navigator.clipboard.writeText(textContent).then(()=>{copyBtn.textContent='✅ 已复制';setTimeout(()=>copyBtn.textContent='📋 复制',1500);}).catch(()=>{copyBtn.textContent='复制失败';});});
+    actions.appendChild(copyBtn);inner.appendChild(actions);
   }
   // Attachments
   const atts=msg.attachments||[];
@@ -2678,7 +2795,11 @@ function buildMsg(msg,idx){
     }
     // Attachments with content
     atts.forEach(a=>{
-      if(a.extracted_content||a.file_name)inner.appendChild(buildAttachment(a));
+      if(options.exporting){
+        const detail=document.createElement('details');detail.className='activity-group';
+        const summary=document.createElement('summary');summary.textContent='附件：'+(a.file_name||'文件');detail.appendChild(summary);
+        const pre=document.createElement('pre');pre.className='activity-content';pre.textContent=a.extracted_content||'日志未提供附件正文';detail.appendChild(pre);inner.appendChild(detail);
+      }else if(a.extracted_content||a.file_name)inner.appendChild(buildAttachment(a));
     });
   }
   // v5.7: 整条消息没渲染出任何内容（inner 里只剩 meta 一个子节点）——给出占位说明。
@@ -2693,7 +2814,7 @@ function buildMsg(msg,idx){
   wrap.appendChild(inner);return wrap;
 }
 
-// ── LATEX RENDERING (KaTeX, CDN) ──
+// ── MARKDOWN PLACEHOLDERS (offline KaTeX is configured before parsing) ──
 // ── friendly notice for unsupported (widget) blocks ──
 function replaceUnsupportedBlocks(text){
   if(!text)return text;
@@ -2708,45 +2829,6 @@ function replaceUnsupportedBlocks(text){
   // Any remaining bare placeholders
   text=text.split(placeholder).join('⚠️ 此处原为公式或可视化组件（导出数据未包含源码）');
   return text;
-}
-
-function renderLatex(container){
-  if(typeof katex==='undefined')return;
-  const walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT,{
-    acceptNode(node){
-      let p=node.parentNode;
-      while(p&&p!==container){
-        const tag=p.tagName;
-        if(tag==='CODE'||tag==='PRE'||(p.className&&String(p.className).indexOf('katex')>=0))
-          return NodeFilter.FILTER_REJECT;
-        p=p.parentNode;
-      }
-      return /(\$\$[\s\S]+?\$\$)|(\$[^$\n]+?\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])/.test(node.textContent)
-        ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-    }
-  });
-  const targets=[];let n;
-  while((n=walker.nextNode()))targets.push(n);
-  targets.forEach(node=>{
-    const text=node.textContent;
-    const frag=document.createDocumentFragment();
-    const re=/(\$\$[\s\S]+?\$\$)|(\\\[[\s\S]+?\\\])|(\$[^$\n]+?\$)|(\\\([\s\S]+?\\\))/g;
-    let last=0,m;
-    while((m=re.exec(text))!==null){
-      if(m.index>last)frag.appendChild(document.createTextNode(text.slice(last,m.index)));
-      const raw=m[0];let tex,display;
-      if(raw.startsWith('$$')){tex=raw.slice(2,-2);display=true;}
-      else if(raw.startsWith('\\[')){tex=raw.slice(2,-2);display=true;}
-      else if(raw.startsWith('\\(')){tex=raw.slice(2,-2);display=false;}
-      else{tex=raw.slice(1,-1);display=false;}
-      const span=document.createElement('span');
-      try{katex.render(tex.trim(),span,{displayMode:display,throwOnError:false,errorColor:'#C4653A'});}
-      catch(e){span.textContent=raw;}
-      frag.appendChild(span);last=re.lastIndex;
-    }
-    if(last<text.length)frag.appendChild(document.createTextNode(text.slice(last)));
-    if(frag.childNodes.length)node.parentNode.replaceChild(frag,node);
-  });
 }
 
 function enhanceCodeBlocks(container){
@@ -2788,69 +2870,11 @@ function toolInputText(b){try{return JSON.stringify(b.input,null,2);}catch{retur
 function toolResultText(b){
   const c=b.content;
   if(typeof c==='string')return c;
-  if(Array.isArray(c))return c.map(x=>x&&x.type==='text'?(x.text||''):(typeof x==='string'?x:JSON.stringify(x))).join('\n');
+  if(Array.isArray(c))return c.map(x=>typeof x==='string'?x:x?.type==='text'?(x.text||''):x?.type==='image'?'[图像工具结果]':x?.type==='document'?'[文档工具结果]':JSON.stringify(x)).join('\n');
   if(c==null)return'';
   return JSON.stringify(c,null,2);
 }
-function buildToolBlock(b){
-  const isUse=b.type==='tool_use';
-  const wrap=document.createElement('div');wrap.className='thinking-block tool-block';
-  const toggle=document.createElement('div');toggle.className='thinking-toggle';
-  const arrow=document.createElement('span');arrow.className='ti';arrow.textContent='▶';
-  const label=document.createElement('span');label.style.fontWeight='500';
-  label.textContent=isUse?('🔧 工具调用'+(b.name?'：'+b.name:'')):'↩ 工具结果'+(b.is_error?'（错误）':'');
-  toggle.appendChild(arrow);toggle.appendChild(label);
-  const body=document.createElement('div');body.className='thinking-body';
-  body.textContent=isUse?toolInputText(b):toolResultText(b);
-  toggle.addEventListener('click',()=>{
-    const o=body.classList.toggle('open');toggle.classList.toggle('open',o);
-    reflowMsgHeight(wrap);
-  });
-  wrap.appendChild(toggle);wrap.appendChild(body);return wrap;
-}
-
-// v6.0: injected_prompt_block —— 平台注入进消息里的系统提示，复用思考块外观
-function buildInjected(b){
-  const wrap=document.createElement('div');wrap.className='thinking-block';
-  const toggle=document.createElement('div');toggle.className='thinking-toggle';
-  const arrow=document.createElement('span');arrow.className='ti';arrow.textContent='▶';
-  const label=document.createElement('span');label.style.fontWeight='500';label.textContent='系统注入提示';
-  const sumEl=document.createElement('span');sumEl.className='thinking-sum';
-  if(b.injection_source)sumEl.textContent='— '+b.injection_source;
-  toggle.appendChild(arrow);toggle.appendChild(label);toggle.appendChild(sumEl);
-  const body=document.createElement('div');body.className='thinking-body';body.textContent=(b.prompt||'').trim();
-  toggle.addEventListener('click',()=>{const o=body.classList.toggle('open');toggle.classList.toggle('open',o);reflowMsgHeight(wrap);});
-  wrap.appendChild(toggle);wrap.appendChild(body);return wrap;
-}
-
-function buildThinking(b){
-  const wrap=document.createElement('div');wrap.className='thinking-block';
-  const toggle=document.createElement('div');toggle.className='thinking-toggle';
-  const arrow=document.createElement('span');arrow.className='ti';arrow.textContent='▶';
-  const label=document.createElement('span');label.style.fontWeight='500';label.textContent='思考过程';
-  const sums=(b.summaries||[]).map(s=>s.summary).filter(Boolean).join('；');
-  const sumEl=document.createElement('span');sumEl.className='thinking-sum';
-  if(sums)sumEl.textContent='— '+sums;
-  toggle.appendChild(arrow);toggle.appendChild(label);toggle.appendChild(sumEl);
-  const body=document.createElement('div');body.className='thinking-body';body.textContent=b.thinking||'';
-  // v5.1: 复制思考按钮
-  const actions=document.createElement('div');actions.className='think-actions';
-  const copyBtn=document.createElement('button');copyBtn.className='action-btn';copyBtn.textContent='📋 复制思考';
-  copyBtn.addEventListener('click',e=>{
-    e.stopPropagation();
-    navigator.clipboard.writeText(b.thinking||'').then(()=>{
-      copyBtn.textContent='✅ 已复制';copyBtn.classList.add('done');
-      setTimeout(()=>{copyBtn.textContent='📋 复制思考';copyBtn.classList.remove('done');},1500);
-    }).catch(()=>{copyBtn.textContent='❌ 失败';setTimeout(()=>copyBtn.textContent='📋 复制思考',1500);});
-  });
-  actions.appendChild(copyBtn);
-  toggle.addEventListener('click',()=>{
-    const o=body.classList.toggle('open');toggle.classList.toggle('open',o);
-    reflowMsgHeight(wrap);
-  });
-  wrap.appendChild(toggle);wrap.appendChild(body);wrap.appendChild(actions);return wrap;
-}
-
+// ── ATTACHMENTS ──
 function buildAttachment(a){
   const wrap=document.createElement('div');wrap.className='att-block';
   const hdr=document.createElement('div');hdr.className='att-header';
@@ -3023,11 +3047,38 @@ function removeHL(){
 }
 function clearSearch(){searchInput.value='';srchQ='';srchHits=[];srchCur=-1;searchCount.textContent='';searchPrev.disabled=searchNext.disabled=true;removeHL();if(srchSbList)renderSrchSidebar();}
 
+// ── PORTABLE HTML + ROLE EXPORTS ──
+function cvFileName(conv,ext){const id=String(conv._cc?.sessionId||conv.uuid||'').split('::').pop().replace(/\.jsonl$/,'').slice(0,8);return fmtFileTime(conv.created_at)+'_'+String(conv.name||'conversation').replace(/[\\/:*?"<>|]/g,'_').slice(0,100)+(id?'_'+id:'')+'.'+ext;}
+function convToHtml(conv,msgs,options={}){
+  const transcript=document.createElement('main');transcript.className='transcript';
+  msgs.forEach((msg,idx)=>transcript.appendChild(buildMsg(msg,idx,{exporting:true})));
+  transcript.querySelectorAll('button,.msg-actions,.think-actions,.att-actions').forEach(n=>n.remove());
+  const styles=[...document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
+  const csp="default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; script-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'";
+  return'<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<meta http-equiv="Content-Security-Policy" content="'+esc(csp)+'"><title>'+esc(conv.name||'conversation')+'</title><style>'+styles+'</style><style>'+
+    'html,body{height:auto;min-height:100%;overflow:auto}body{display:block!important;padding:0}.export-page{max-width:1240px;margin:auto;padding:30px 18px 70px}.export-heading{padding:10px 14px 22px;border-bottom:1px solid var(--bd);margin-bottom:20px}.export-heading h1{font-size:28px;color:var(--t1)}.export-heading p{font-size:12px;color:var(--t3)}.transcript{position:static;overflow:visible}.msg-wrap{position:static!important;top:auto!important;width:100%}.msg-inner{max-width:94%}.msg-wrap.assistant .msg-inner{width:100%}.bubble{max-width:100%}.export-page pre{white-space:pre-wrap;overflow-wrap:anywhere}.activity-content{max-height:none}.export-credit{margin:32px 14px 0;color:var(--t3);font-size:12px}@media(max-width:600px){.msg-inner{max-width:100%}.export-page{padding:16px 6px}}@media print{details>*{display:block!important}.activity-list{display:block!important}.activity-content{max-height:none}.msg-wrap{break-inside:auto}}'+
+    '</style></head><body'+(options.dark?' data-theme="dark"':'')+'><div class="export-page"><header class="export-heading"><h1>'+esc(conv.name||'conversation')+'</h1><p>'+esc(fmtFull(conv.created_at||''))+' · '+msgs.length+' 条消息'+(conv._cc?.sessionId?' · '+esc(conv._cc.sessionId):'')+'</p></header>'+transcript.outerHTML+
+    '<footer class="export-credit">由 ClaudeViewer 生成 · 原项目 © crownleo · GPL-3.0 · 内容在本地处理</footer></div></body></html>';
+}
+function cvRoleMessages(msgs,role){return msgs.filter(m=>role==='user'?m.sender==='human':m.sender!=='human');}
+function cvDownloadHtml(){if(curConv&&curMsgs.length)download(convToHtml(curConv,curMsgs,{dark:darkMode}),cvFileName(curConv,'html'),'text/html;charset=utf-8');}
+async function cvDownloadRoles(){
+  if(!curConv||!curMsgs.length)return;
+  const zip=new JSZip();const stem=cvFileName(curConv,'md').replace(/\.md$/,'');
+  zip.file(stem+'_用户输入.md',convToMd(curConv,cvRoleMessages(curMsgs,'user')));
+  zip.file(stem+'_Claude输出.md',convToMd(curConv,cvRoleMessages(curMsgs,'assistant')));
+  download(await zip.generateAsync({type:'blob'}),stem+'_分角色.zip','application/zip');
+}
+// ── END PORTABLE HTML + ROLE EXPORTS ──
+
+$('exp-html').addEventListener('click',cvDownloadHtml);
+$('exp-roles').addEventListener('click',cvDownloadRoles);
+
 // ── EXPORT MD (single) ────────────────────────────────
 $('exp-md').addEventListener('click',()=>{
   if(!curConv||!curMsgs.length)return;
-  const title=curConv.name||'conversation';
-  const fname=fmtFileTime(curConv.created_at)+'_'+title.replace(/[\\/:*?"<>|]/g,'_').slice(0,60)+'.md';
+  const fname=cvFileName(curConv,'md');
   download(convToMd(curConv,curMsgs),fname,'text/markdown;charset=utf-8');
 });
 
@@ -3052,100 +3103,38 @@ function mdFence(content){
 }
 
 function convToMd(conv,msgs){
-  let md=`# ${conv.name||conv.summary||'conversation'}\n\n`;
-  md+=`> 创建：${fmtFull(conv.created_at||'')}${conv.updated_at?' · 最后更新：'+fmtFull(conv.updated_at):''} · ${msgs.length} 条消息\n\n`;
-  msgs.forEach(msg=>{
-    const isH=msg.sender==='human';
-    const textContent=(msg.content||[]).filter(b=>b.type==='text').map(b=>b.text||'').join('\n').trim()||msg.text||'';
-    const thinkings=(msg.content||[]).filter(b=>b.type==='thinking');
-    md+=`## ${isH?'🧑‍💻 You':'🤖 Claude'}  \`${fmtFull(msg.created_at||'')}\`\n\n`;
-    // v5.7: 空消息导出成显式占位，避免只留一个光秃秃的标题
-    if(isEmptyMsg(msg)){
-      md+=`> ⚠ ${isH?'此条消息在导出数据中为空':'此轮无回复内容 — 导出数据中该消息为空（当时生成失败或被中断）'}\n\n`;
-      return;
+  let md=`# ${conv.name||conv.summary||'conversation'}\n\n> 创建：${fmtFull(conv.created_at||'')} · ${msgs.length} 条消息\n\n`;
+  for(const msg of msgs){
+    md+=`## ${msg.sender==='human'?'You':'Claude'} · ${fmtFull(msg.created_at||'')}\n\n`;
+    const blocks=(msg.content||[]).length?msg.content:[{type:'text',text:msg.text||''}];
+    if(isEmptyMsg(msg))md+='> 日志中此条消息没有可显示内容。\n\n';
+    for(const b of blocks){
+      if(b.type==='text')md+=shiftMdHeadings(cvLiteralNotation(b.text||'').replace(/\[([\d\s\-\u0304\u0305]+)\]\(([\d\s\-\u0304\u0305]+)\)/g,'\\[$1\\]\\($2\\)'),2)+'\n\n';
+      else if(b.type==='thinking')md+='<details>\n<summary>思考过程</summary>\n\n'+(b.thinking||'日志未保存正文')+'\n\n</details>\n\n';
+      else if(b.type==='redacted_thinking')md+='> 此段思考已由来源隐藏，日志未提供正文。\n\n';
+      else if(b.type==='tool_use'||b.type==='tool_result'){
+        const label=b.type==='tool_use'?'工具调用：'+(b.name||'工具'):'工具结果'+(b.is_error?'（错误）':'');
+        const body=b.type==='tool_use'?toolInputText(b):toolResultText(b);const fence=mdFence(body);
+        md+='**'+label+'**\n\n'+fence+'\n'+body+'\n'+fence+'\n\n';
+      }else if(b.type==='injected_prompt_block'||b.type==='notice'){
+        const body=b.prompt||b.text||'';const fence=mdFence(body);md+='**客户端记录**\n\n'+fence+'\n'+body+'\n'+fence+'\n\n';
+      }else if(b.type==='image'||b.type==='document')md+='[附件：'+(b.title||b.type)+']\n\n';
     }
-    thinkings.forEach(t=>{
-      const sum=(t.summaries||[]).map(s=>s.summary).join('；');
-      md+=`<details>\n<summary>思考过程${sum?' — '+sum:''}</summary>\n\n${t.thinking||''}\n\n</details>\n\n`;
-    });
-    // v5.6: 工具调用 / 结果（Claude Code 会话核心内容；结果过大时截断）
-    (msg.content||[]).filter(b=>b.type==='tool_use'||b.type==='tool_result').forEach(b=>{
-      if(b.type==='tool_use'){
-        const inp=toolInputText(b);const f=mdFence(inp);
-        md+=`**🔧 工具调用${b.name?'：'+b.name:''}**\n${f}\n${inp}\n${f}\n\n`;
-      }else{
-        const out=toolResultText(b);const cut=out.length>4000;const body=out.slice(0,4000)+(cut?'\n…（工具结果已截断）':'');const f=mdFence(body);
-        md+=`**↩ 工具结果${b.is_error?'（错误）':''}**\n${f}\n${body}\n${f}\n\n`;
-      }
-    });
-    if(textContent.trim())md+=shiftMdHeadings(textContent,2)+'\n\n';
-    const atts=msg.attachments||[];
-    atts.forEach(a=>{
-      if(!a.extracted_content)return;
-      const cut=a.extracted_content.length>500;
-      const body=a.extracted_content.slice(0,500)+(cut?'\n…（附件内容已截断）':'');
-      const f=mdFence(body);
-      md+=`**附件：${a.file_name||''}**\n${f}\n${body}\n${f}\n\n`;
-    });
+    for(const a of msg.attachments||[]){const body=a.extracted_content||'';const fence=mdFence(body);md+='**附件：'+(a.file_name||'')+'**\n\n'+fence+'\n'+body+'\n'+fence+'\n\n';}
     md+='---\n\n';
-  });
+  }
   return md;
 }
 
 // ── EXPORT PDF (single) ───────────────────────────────
 // 在父窗口用已内联的 marked + KaTeX 预渲染，把结果烘焙进导出 HTML，
 // 弹窗因此无需任何脚本或 CDN（离线可用）。
-function renderMdForExport(tc){
-  const d=document.createElement('div');
-  try{d.innerHTML=marked.parse(tc);}catch{d.textContent=tc;return d.innerHTML;}
-  try{if(window.renderMathInElement)renderMathInElement(d,{
-    delimiters:[{left:'$$',right:'$$',display:true},{left:'\\[',right:'\\]',display:true},
-      {left:'$',right:'$',display:false},{left:'\\(',right:'\\)',display:false}],
-    throwOnError:false,ignoredTags:['script','noscript','style','textarea','pre','code']});}catch(e){}
-  return d.innerHTML;
-}
 $('exp-pdf').addEventListener('click',()=>{
   if(!curConv||!curMsgs.length)return;
-  const title=curConv.name||'conversation';
-  let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(title)}</title>
-  <style>${(document.getElementById('katex-css')||{}).textContent||''}<\/style>
-  <style>body{font-family:system-ui,sans-serif;font-size:14px;line-height:1.7;max-width:800px;margin:0 auto;padding:32px;color:#1a1a1a}
-  h1{font-family:Georgia,serif;font-size:22px;margin-bottom:6px}.sub{color:#9c9590;font-size:12px;margin-bottom:32px}
-  .msg{margin-bottom:20px;display:flex;flex-direction:column}.msg.human{align-items:flex-end}.msg.assistant{align-items:flex-start}
-  .mh{font-size:11px;color:#9c9590;margin-bottom:4px}.sl{font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.05em}
-  .sl.h{color:#C4653A}.sl.a{color:#6B8F71}
-  .bubble{padding:10px 14px;border-radius:14px;max-width:82%;word-break:break-word}
-  .bubble.h{background:#F5E6D3;border-bottom-right-radius:3px}
-  .bubble.a{background:#fff;border:1px solid #E4DDD6;border-bottom-left-radius:3px}
-  .think{background:#f5f1ec;border:1px solid #ddd8d2;border-radius:10px;padding:8px 12px;margin-bottom:7px;max-width:82%;font-size:12px;color:#4a4543;font-style:italic}
-  .att{background:#f9f6f2;border:1px solid #e4ddd6;border-radius:8px;padding:7px 11px;margin-top:5px;max-width:82%;font-size:12px}
-  pre{background:#1b1f27;color:#abb2bf;padding:11px;border-radius:8px;overflow-x:auto;font-size:12px}
-  code{background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px;font-size:12px}
-  pre code{background:none}table{border-collapse:collapse;width:100%}th,td{border:1px solid #e8ddd3;padding:5px 9px}th{background:#f5e6d3}
-  blockquote{border-left:3px solid #D97757;padding:3px 11px;color:#4a4543;font-style:italic}
-  @media print{body{max-width:100%}}<\/style></head><body>
-  <h1>${esc(title)}</h1><div class="sub">${curMsgs.length}条消息 · ${fmtFull(new Date().toISOString())}导出</div>`;
-  curMsgs.forEach(msg=>{
-    const isH=msg.sender==='human';
-    const tc=(msg.content||[]).filter(b=>b.type==='text').map(b=>b.text||'').join('\n').trim()||msg.text||'';
-    const thinks=(msg.content||[]).filter(b=>b.type==='thinking');
-    html+=`<div class="msg ${isH?'human':'assistant'}"><div class="mh"><span class="sl ${isH?'h':'a'}">${isH?'You':'Claude'}</span> · ${fmtFull(msg.created_at||'')}</div>`;
-    thinks.forEach(t=>{const sum=(t.summaries||[]).map(s=>s.summary).join('；');
-      html+=`<div class="think"><b>思考过程${sum?' — '+sum:''}</b><br>${esc((t.thinking||'').slice(0,800))}</div>`;});
-    if(tc.trim()){
-      if(isH)html+=`<div class="bubble h">${esc(tc).replace(/\n/g,'<br>')}</div>`;
-      else html+=`<div class="bubble a">${renderMdForExport(tc)}</div>`;
-    }
-    (msg.attachments||[]).forEach(a=>{if(a.file_name)html+=`<div class="att">📄 ${esc(a.file_name)}${a.file_size?' ('+formatBytes(a.file_size)+')':''}</div>`;});
-    // v5.7: 空消息占位，保持与页面渲染一致
-    if(isEmptyMsg(msg))html+=`<div class="att" style="font-style:italic">⚠ ${isH?'此条消息在导出数据中为空':'此轮无回复内容 — 导出数据中该消息为空'}</div>`;
-    html+='</div>';
-  });
-  html+='</body></html>';
-  const win=window.open('','_blank','width=900,height=700');
-  if(!win){alert('请允许弹出窗口以导出PDF');return;}
-  win.document.write(html);win.document.close();
-  win.addEventListener('load',()=>setTimeout(()=>win.print(),300));
+  const win=window.open('','_blank','width=1000,height=800');
+  if(!win){alert('请允许弹出窗口以导出 PDF');return;}
+  win.document.write(convToHtml(curConv,curMsgs));win.document.close();
+  win.addEventListener('load',()=>setTimeout(()=>{win.document.querySelectorAll('details').forEach(d=>d.open=true);win.print();},200));
 });
 
 // ── EXPORT ALL (ZIP) ──────────────────────────────────
@@ -3193,7 +3182,7 @@ document.addEventListener('click',e=>{
 });
 
 // ══════════════════════════════════════════════════════
-//  v5.6: CLAUDE CODE 本地会话（只读 + 导出 MD）
+//  CLAUDE CODE 本地会话（只读 + HTML / MD / 分角色导出）
 // ══════════════════════════════════════════════════════
 function hasExportData(){return!!(appData.convs&&appData.convs.length)}
 function hasCCData(){return ccProjects.length>0}
@@ -3224,7 +3213,7 @@ function ccIndexWebFiles(files){
     const last=parts[parts.length-1];
     const pi=parts.indexOf('projects');
     if(pi>=0&&parts.length>pi+2&&last.endsWith('.jsonl')){
-      const dir=parts[pi+1];(projects[dir]=projects[dir]||[]).push({name:last,file:f});continue;
+      const dir=parts[pi+1];(projects[dir]=projects[dir]||[]).push({name:parts.slice(pi+2).join('/'),file:f});continue;
     }
     if(parts.indexOf('sessions')>=0&&last.endsWith('.json'))sessions.push(f);
   }
@@ -3247,9 +3236,8 @@ const CCStore={
   async _entryFile(e){return e.file?e.file:await e.fh.getFile();},
   async _readHead(e){
     const f=await this._entryFile(e);
-    const txt=await f.slice(0,8192).text();
-    const nl=txt.indexOf('\n');const line=(nl>=0?txt.slice(0,nl):txt).trim();
-    if(!line)return null;try{return JSON.parse(line);}catch{return null;}
+    const txt=await f.slice(0,65536).text();
+    for(const line of txt.split('\n')){try{const r=JSON.parse(line);if(r.cwd)return r;}catch{}}return null;
   },
   async getActiveIds(){
     const ids=new Set();
@@ -3271,7 +3259,8 @@ const CCStore={
       for await(const[name,handle] of this.projRoot.entries()){
         if(handle.kind!=='directory'||name.startsWith('.'))continue;
         const entries=[];
-        for await(const[fname,fh] of handle.entries()){if(fname.endsWith('.jsonl'))entries.push({name:fname,fh});}
+        const scan=async(dir,prefix='',depth=0)=>{for await(const[fname,fh]of dir.entries()){if(fh.kind==='file'&&fname.endsWith('.jsonl'))entries.push({name:prefix+fname,fh});else if(fh.kind==='directory'&&depth<4&&!fname.startsWith('.'))await scan(fh,prefix+fname+'/',depth+1);}};
+        await scan(handle);
         out.push({dirName:name,entries});
       }
       return out;
@@ -3302,25 +3291,9 @@ const CCStore={
     const list=[];
     for(const e of p._entries){
       const file=await this._entryFile(e);
-      let title=null,lastPrompt=null,firstUserText=null,sessionId=null,firstTs=null,lastTs=null;
-      let inTokens=0,outTokens=0,cacheIn=0,cacheCreate=0,userCount=0,assistantCount=0;
-      try{
-        const txt=await file.text();
-        for(const raw of txt.split('\n')){
-          if(!raw.trim())continue;let r;try{r=JSON.parse(raw);}catch{continue;}
-          if(!firstTs&&r.timestamp)firstTs=r.timestamp;if(r.timestamp)lastTs=r.timestamp;
-          if(!sessionId&&r.sessionId)sessionId=r.sessionId;
-          if(r.type==='ai-title'&&r.aiTitle)title=r.aiTitle;
-          if(r.type==='last-prompt'&&r.lastPrompt)lastPrompt=r.lastPrompt;
-          if(r.type==='user'){userCount++;if(!firstUserText)firstUserText=ccExtractText(r.message&&r.message.content);}
-          if(r.type==='assistant'){assistantCount++;const u=r.message&&r.message.usage;
-            if(u){inTokens+=u.input_tokens||0;outTokens+=u.output_tokens||0;cacheIn+=u.cache_read_input_tokens||0;cacheCreate+=u.cache_creation_input_tokens||0;}}
-        }
-      }catch{}
-      const displayTitle=title||(firstUserText?firstUserText.slice(0,100):null)||(lastPrompt?lastPrompt.slice(0,100):null)||e.name;
-      list.push({fileName:e.name,displayTitle,size:file.size,lastModified:file.lastModified,firstTs,lastTs,
-        inTokens,outTokens,cacheIn,cacheCreate,userCount,assistantCount,sessionId,
-        isActive:sessionId?active.has(sessionId):false,isAgent:e.name.startsWith('agent-')});
+      const parsed=ccParseRecords(await file.text());const info=ccSessionInfo(parsed.records,e.name);
+      list.push({...info,fileName:e.name,size:file.size,lastModified:file.lastModified,malformed:parsed.malformed,
+        isActive:info.sessionId?active.has(info.sessionId):false,isAgent:/(^|\/)agent-[^/]+\.jsonl$/.test(e.name)});
     }
     list.sort((a,b)=>b.lastModified-a.lastModified);
     return list;
@@ -3338,18 +3311,13 @@ const CCStore={
         try{
           const txt=await(await this._entryFile(e)).text();
           if(!txt.toLowerCase().includes(q))continue;
-          let title=null,firstUser=null,excerpt='',found=false;
-          for(const raw of txt.split('\n')){
-            if(!raw.trim())continue;let r;try{r=JSON.parse(raw);}catch{continue;}
-            if(r.type==='ai-title'&&r.aiTitle)title=r.aiTitle;
-            if(!found&&(r.type==='user'||r.type==='assistant')){
-              const text=ccExtractText(r.message&&r.message.content);
-              if(r.type==='user'&&!firstUser)firstUser=text;
-              if(text.toLowerCase().includes(q)){found=true;const idx=text.toLowerCase().indexOf(q);
-                excerpt=text.slice(Math.max(0,idx-60),Math.min(text.length,idx+query.length+60));}
-            }
+          const parsed=ccParseRecords(txt);const info=ccSessionInfo(parsed.records,e.name);let excerpt='';
+          for(const r of parsed.records){
+            if(r.type!=='user'&&r.type!=='assistant')continue;
+            const text=ccBlocks(r.message?.content).map(b=>b.text||b.thinking||(b.type==='tool_use'?toolInputText(b):b.type==='tool_result'?toolResultText(b):'')).join('\n');
+            const i=text.toLowerCase().indexOf(q);if(i>=0){excerpt=text.slice(Math.max(0,i-60),i+query.length+60);break;}
           }
-          if(found)results.push({dirName:p.dirName,fileName:e.name,title:title||(firstUser?firstUser.slice(0,80):e.name),excerpt});
+          if(excerpt||info.displayTitle.toLowerCase().includes(q))results.push({dirName:p.dirName,fileName:e.name,title:info.displayTitle,excerpt:excerpt||info.displayTitle});
         }catch{}
       }
     }
@@ -3357,35 +3325,133 @@ const CCStore={
   },
 };
 
-// ── jsonl → ClaudeViewer conv 模型（归一化适配器）──
-function ccToConv(text,meta){
-  const{dirName,s}=meta;
-  const records=[];
-  for(const raw of text.split('\n')){if(!raw.trim())continue;
-    try{const r=JSON.parse(raw);if(r.type==='user'||r.type==='assistant')records.push(r);}catch{}}
-  const norm=c=>typeof c==='string'?(c.trim()?[{type:'text',text:c}]:[]):(Array.isArray(c)?c:[]);
-  const mapBlock=b=>(b&&b.type==='image')?{type:'text',text:'\n`[图片]`\n'}:b;
-  const items=[];
-  for(const r of records){
-    const blocks=norm(r.message&&r.message.content).map(mapBlock);
-    if(!blocks.length)continue;
-    if(r.type==='assistant'){
-      const mid=r.message&&r.message.id;const prev=items[items.length-1];
-      if(prev&&prev.sender==='assistant'&&mid&&prev._mid===mid){prev.content.push(...blocks);prev.created_at=r.timestamp||prev.created_at;}
-      else items.push({uuid:'m'+items.length,sender:'assistant',_mid:mid,created_at:r.timestamp||'',content:blocks});
-    }else{
-      const isTR=blocks.every(b=>b.type==='tool_result');
-      items.push({uuid:'m'+items.length,sender:isTR?'assistant':'human',created_at:r.timestamp||'',content:blocks});
+// ── CC NORMALIZATION: tolerate append-only transcripts and SDK stream-json ──
+function ccParseRecords(text){
+  const records=[];let malformed=0;
+  for(const line of String(text||'').split(/\r?\n/)){
+    if(!line.trim())continue;
+    try{const r=JSON.parse(line);if(r&&typeof r==='object')records.push(r);else malformed++;}catch{malformed++;}
+  }
+  // A stream-json recording may contain both deltas and a completed assistant
+  // envelope. Prefer the completed message so content is never displayed twice.
+  const complete=new Set(records.filter(r=>r.type==='assistant'&&r.message?.id).map(r=>r.message.id));
+  const streams=new Map();const extra=[];
+  for(let i=0;i<records.length;i++){
+    const r=records[i];if(r.type!=='stream_event'||!r.event)continue;
+    const e=r.event;const key=r.parent_tool_use_id||'main';
+    if(e.type==='message_start')streams.set(key,{id:e.message?.id,role:'assistant',content:[],usage:e.message?.usage||{},at:i,time:r.timestamp,uuid:r.uuid});
+    const m=streams.get(key);if(!m)continue;
+    if(e.type==='content_block_start')m.content[e.index]={...e.content_block};
+    if(e.type==='content_block_delta'){
+      const b=m.content[e.index];if(!b)continue;const d=e.delta||{};
+      if(d.type==='text_delta')b.text=(b.text||'')+(d.text||'');
+      if(d.type==='thinking_delta')b.thinking=(b.thinking||'')+(d.thinking||'');
+      if(d.type==='input_json_delta')b._json=(b._json||'')+(d.partial_json||'');
+    }
+    if(e.type==='message_delta'){m.stop_reason=e.delta?.stop_reason;Object.assign(m.usage,e.usage||{});}
+    if(e.type==='message_stop'){
+      if(!complete.has(m.id)){
+        m.content=m.content.filter(Boolean).map(b=>{if(b._json){try{b.input=JSON.parse(b._json);}catch{b.input={partial_json:b._json};}delete b._json;}return b;});
+        extra.push({at:m.at,record:{type:'assistant',timestamp:m.time,uuid:m.uuid,message:m}});
+      }
+      streams.delete(key);
     }
   }
-  return{
-    uuid:dirName+'::'+s.fileName,name:s.displayTitle||s.fileName,summary:'',
-    created_at:s.firstTs||'',updated_at:s.lastTs||(s.lastModified?new Date(s.lastModified).toISOString():''),
-    chat_messages:items,
-    _cc:{dirName,fileName:s.fileName,size:s.size,sessionId:s.sessionId,isActive:s.isActive,isAgent:s.isAgent,
-      tokens:{in:s.inTokens,out:s.outTokens,cacheR:s.cacheIn,cacheC:s.cacheCreate},userCount:s.userCount,assistantCount:s.assistantCount}
-  };
+  for(const m of streams.values())if(!complete.has(m.id)){
+    m.content=m.content.filter(Boolean).map(b=>{if(b._json){try{b.input=JSON.parse(b._json);}catch{b.input={partial_json:b._json};}delete b._json;}return b;});
+    if(m.content.length){m.content.unshift({type:'notice',text:'流式记录在消息结束前中断；以下为日志中已保存的内容。'});extra.push({at:m.at,record:{type:'assistant',timestamp:m.time,uuid:m.uuid,message:m}});}
+  }
+  const at=new Map(extra.map(x=>[x.at,x.record]));const seen=new Set();const output=[];
+  for(let i=0;i<records.length;i++){
+    const r=at.get(i)||records[i];if(r.type==='stream_event')continue;
+    if(r.uuid){if(seen.has(r.uuid))continue;seen.add(r.uuid);}
+    output.push(r);
+  }
+  return{records:output,malformed};
 }
+function ccBlocks(content){return typeof content==='string'?(content.trim()?[{type:'text',text:content}]:[]):Array.isArray(content)?content.filter(b=>b&&typeof b==='object'):[];}
+function ccIsInjected(text){return /^(?:Base directory for this skill:|<local-command-(?:caveat|stdout|stderr)>|<task-notification>|<system-reminder>|\[Request interrupted by user)/.test(text.trim());}
+function ccCommandText(text){
+  if(!text.trim().startsWith('<command-name>'))return text;
+  const name=text.match(/<command-name>([\s\S]*?)<\/command-name>/)?.[1]||'';
+  const args=text.match(/<command-args>([\s\S]*?)<\/command-args>/)?.[1]||'';
+  return(name.trim()+' '+args.trim()).trim();
+}
+function ccHasUserInput(r){
+  return r.type==='user'&&!r.isMeta&&ccBlocks(r.message?.content).some(b=>b.type==='image'||b.type==='document'||b.type==='text'&&b.text?.trim()&&!ccIsInjected(b.text));
+}
+function ccSessionInfo(records,fallback=''){
+  let custom='',ai='',agent='',prompt='',lastPrompt='',sessionId='',cwd='',firstTs='',lastTs='';
+  const usage=new Map(),assistantIds=new Set();let userCount=0,anonymous=0;
+  for(const r of records){
+    if(r.timestamp&&!isNaN(Date.parse(r.timestamp))){const t=new Date(r.timestamp).toISOString();if(!firstTs||t<firstTs)firstTs=t;if(!lastTs||t>lastTs)lastTs=t;}
+    sessionId=sessionId||r.sessionId||r.session_id||'';cwd=cwd||r.cwd||'';
+    if(r.type==='custom-title'&&r.customTitle)custom=r.customTitle;
+    if(r.type==='ai-title'&&r.aiTitle)ai=r.aiTitle;
+    if(r.type==='agent-name'&&r.agentName)agent=r.agentName;
+    if(r.type==='last-prompt'&&r.lastPrompt)lastPrompt=r.lastPrompt;
+    if(ccHasUserInput(r)){userCount++;if(!prompt)prompt=ccCommandText(ccExtractText(r.message?.content));}
+    if(r.type==='assistant'){
+      const id=r.message?.id||r.uuid||'anonymous-'+anonymous++;assistantIds.add(id);
+      const u=r.message?.usage;if(!u)continue;const old=usage.get(id)||{};
+      for(const k of ['input_tokens','output_tokens','cache_read_input_tokens','cache_creation_input_tokens'])old[k]=Math.max(old[k]||0,Number(u[k])||0);
+      usage.set(id,old);
+    }
+  }
+  const sum=k=>[...usage.values()].reduce((n,u)=>n+(u[k]||0),0);
+  return{displayTitle:custom||ai||agent||prompt.slice(0,100)||lastPrompt.slice(0,100)||fallback,
+    sessionId,cwd,firstTs,lastTs,userCount,assistantCount:assistantIds.size,
+    inTokens:sum('input_tokens'),outTokens:sum('output_tokens'),cacheIn:sum('cache_read_input_tokens'),cacheCreate:sum('cache_creation_input_tokens')};
+}
+function ccToConv(text,meta){
+  const{dirName,s}=meta;const parsed=ccParseRecords(text);const info=ccSessionInfo(parsed.records,s.displayTitle||s.fileName);
+  const items=[],toolNames=new Map(),seenBlocks=new Map();
+  function append(sender,blocks,r,final=false){
+    if(!blocks.length)return;const prev=items[items.length-1];const mid=r.message?.id;
+    if(sender==='assistant'&&prev?.sender==='assistant'&&(!prev._final||prev._mid===mid)){
+      prev.content.push(...blocks);prev._mid=mid||prev._mid;prev._final=prev._final||final;prev.updated_at=r.timestamp||prev.updated_at;return;
+    }
+    items.push({uuid:r.uuid||'m'+items.length,sender,created_at:r.timestamp||'',content:blocks,_mid:mid,_final:final});
+  }
+  for(const r of parsed.records){
+    if(r.type==='assistant'){
+      const mid=r.message?.id||r.uuid;const seen=seenBlocks.get(mid)||new Set();seenBlocks.set(mid,seen);
+      const blocks=[];
+      for(const original of ccBlocks(r.message?.content)){
+        const b={...original};delete b.signature; // Signatures are not displayable thinking.
+        const key=JSON.stringify(b);if(seen.has(key))continue;seen.add(key);
+        if(b.type==='tool_use')toolNames.set(b.id,b.name);
+        blocks.push(b);
+      }
+      append('assistant',blocks,r,r.message?.stop_reason==='end_turn'&&blocks.some(b=>b.type==='text'));
+    }else if(r.type==='user'){
+      let human=[];
+      const flush=()=>{append('human',human,r);human=[];};
+      for(const original of ccBlocks(r.message?.content)){
+        const b={...original};
+        if(b.type==='tool_result'){flush();b.name=toolNames.get(b.tool_use_id)||b.name;append('assistant',[b],r);}
+        else if(r.isMeta||b.type==='text'&&ccIsInjected(b.text||'')){
+          flush();append('assistant',[{type:'injected_prompt_block',prompt:b.text||JSON.stringify(b),injection_source:'Claude Code 客户端'}],r);
+        }else if(b.type==='text'){b.text=ccCommandText(b.text||'');human.push(b);}
+        else human.push(b);
+      }
+      flush();
+    }else if(r.type==='result'&&r.result){
+      const prev=items[items.length-1];const lastText=prev?.content.filter(b=>b.type==='text').map(b=>b.text).join('\n');
+      if(lastText===r.result)prev._final=true;
+      else if(!prev?._final)append('assistant',[{type:'text',text:r.result}],r,true);
+    }else if(r.type==='result'&&r.is_error){
+      append('assistant',[{type:'notice',text:'会话结束：'+(r.subtype||'错误')+'\n'+(r.errors||[]).join('\n')}],r);
+    }else if(r.type==='system'&&r.subtype==='compact_boundary'){
+      append('assistant',[{type:'notice',text:'上下文已压缩（保留日志中已有的历史消息）'}],r);
+    }
+  }
+  return{uuid:dirName+'::'+s.fileName,name:info.displayTitle,summary:'',created_at:info.firstTs||s.firstTs||'',
+    updated_at:info.lastTs||s.lastTs||(s.lastModified?new Date(s.lastModified).toISOString():''),chat_messages:items,
+    _cc:{...info,dirName,fileName:s.fileName,size:s.size,sessionId:info.sessionId||s.sessionId,isActive:s.isActive,isAgent:s.isAgent,
+      malformed:parsed.malformed,tokens:{in:info.inTokens,out:info.outTokens,cacheR:info.cacheIn,cacheC:info.cacheCreate},userCount:info.userCount,assistantCount:info.assistantCount}};
+}
+// ── END CC NORMALIZATION ──
 
 // ── 入口：选目录 → 扫描 → 进入 CC 模式 ──
 async function openClaudeCodeDir(){
@@ -3428,7 +3494,7 @@ function renderCCSidebar(){
     const arrow=document.createElement('span');arrow.className='cc-arrow'+(ccExpanded.has(p.dirName)?' open':'');arrow.textContent='▶';
     const nm=document.createElement('span');nm.className='cc-proj-name';nm.textContent=p.displayName;nm.title=p.cwd;
     head.appendChild(arrow);head.appendChild(nm);
-    if(p.hasActive){const dot=document.createElement('span');dot.className='cc-dot';dot.textContent='●';dot.title='有活跃会话';head.appendChild(dot);}
+    if(p.hasActive){const dot=document.createElement('span');dot.className='cc-dot';dot.textContent='●';dot.title='存在会话状态文件；不代表进程仍在运行';head.appendChild(dot);}
     const cnt=document.createElement('span');cnt.className='cc-proj-count';cnt.textContent=p.count;head.appendChild(cnt);
     head.addEventListener('click',()=>toggleCCProject(p.dirName));
     grp.appendChild(head);
@@ -3462,7 +3528,7 @@ function buildCCSessionCard(dirName,s){
   const b1=document.createElement('span');b1.className='badge';b1.textContent=s.userCount+' 轮';b1.title='用户轮数';meta.appendChild(b1);
   if(s.inTokens||s.outTokens){const b2=document.createElement('span');b2.className='badge blue';b2.textContent='↑'+fmtTok(s.inTokens)+' ↓'+fmtTok(s.outTokens);b2.title='输入/输出 token';meta.appendChild(b2);}
   if(s.cacheIn){const b4=document.createElement('span');b4.className='badge blue';b4.textContent='⚡'+fmtTok(s.cacheIn);b4.title='缓存读取 token';meta.appendChild(b4);}
-  if(s.isActive){const ba=document.createElement('span');ba.className='badge green';ba.textContent='● 活跃';meta.appendChild(ba);}
+  if(s.isActive){const ba=document.createElement('span');ba.className='badge green';ba.textContent='● 状态记录';ba.title='发现 sessions 状态文件；无法确认进程是否仍在运行';meta.appendChild(ba);}
   if(s.isAgent){const bg=document.createElement('span');bg.className='badge amber';bg.textContent='Agent';bg.title='子代理会话';meta.appendChild(bg);}
   const bz=document.createElement('span');bz.className='badge gray';bz.textContent=formatBytes(s.size);meta.appendChild(bz);
   const ct=document.createElement('span');ct.className='card-time';ct.textContent=s.lastModified?fmtDate(new Date(s.lastModified).toISOString()):'';meta.appendChild(ct);
