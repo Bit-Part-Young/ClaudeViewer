@@ -22,7 +22,7 @@ test('real DOM: ordered activity, offline exports, Markdown, math, search and mo
   const fixture=[
     {type:'user',uuid:'u',timestamp:'2026-10-08T13:46:13Z',message:{content:'**用户问题** a/2[111](11̄2)'}},
     {type:'assistant',uuid:'a1',timestamp:'2026-10-08T13:46:20Z',message:{id:'a',content:[{type:'thinking',thinking:'Saved thinking body.'}]}},
-    {type:'assistant',uuid:'a2',message:{id:'a',content:[{type:'tool_use',id:'t',name:'Bash',input:{command:'printf test',timeout:1200}}]}},
+    {type:'assistant',uuid:'a2',message:{id:'a',content:[{type:'tool_use',id:'t',name:'Bash',input:{description:'Run example',command:'printf test',timeout:1200}}]}},
     {type:'user',uuid:'r',message:{content:[{type:'tool_result',tool_use_id:'t',content:'x'.repeat(6000),is_error:true}]}},
     {type:'assistant',uuid:'w',message:{id:'w',content:[{type:'tool_use',id:'write',name:'Write',input:{file_path:'/sample/README.md',content:'ok'}}]}},
     {type:'user',uuid:'wr',message:{content:[{type:'tool_result',tool_use_id:'write',content:'saved'}]}},
@@ -62,6 +62,12 @@ test('real DOM: ordered activity, offline exports, Markdown, math, search and mo
   await page.waitForFunction(()=>document.querySelector('.activity-content img')?.naturalWidth===1);
   await page.locator('#cc-output-index summary').click();await page.getByRole('link',{name:'/sample/README.md'}).click();
   assert.equal(await page.locator('.activity-entry[open]').filter({hasText:'写入 README.md'}).count(),1);
+  // One match crosses syntax-color spans in the command, another is inside its collapsed JSON parameters.
+  await page.locator('#search-input').fill('printf test');await page.locator('#search-btn').click();
+  assert.equal(await page.locator('#search-count').innerText(),'1/2');
+  assert.equal((await page.locator('.cv-shell mark.hl.cur').allTextContents()).join(''),'printf test');
+  await page.locator('#search-next').click();assert.equal(await page.locator('#search-count').innerText(),'2/2');
+  assert.equal(await page.locator('.cv-params[open] mark.hl.cur').innerText(),'printf test');
   await page.locator('#search-input').fill('Answer');await page.locator('#search-btn').click();assert.match(await page.locator('#search-count').innerText(),/1/);
   await page.locator('#srch-toggle').click();await page.waitForFunction(()=>document.getElementById('srch-sidebar').getBoundingClientRect().width<2);
   await page.setViewportSize({width:390,height:844});

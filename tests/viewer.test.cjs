@@ -138,3 +138,43 @@ test('delivered mid-turn prompts split the original timeline and retain pictures
   const m=conv.chat_messages[1];assert.equal(m._midTurn,true);assert.equal(m.created_at,queued.attachment.timestamp);
   assert.deepEqual(Array.from(m.content,b=>b.type),['image','text']);assert.equal(m.content[1].text,'update');
 });
+
+test('peer handbacks (including queued delivery) are joined once with child fallback, never counted as user turns',()=>{
+  const origin={kind:'peer',handback:true,senderTaskId:'a1',handbackReportText:'## first report'};
+  const rows=[user('question'),assistant([{type:'tool_use',id:'call',name:'Agent',input:{description:'Survey'}}]),
+    {...user([{type:'tool_result',tool_use_id:'call',content:'launched'}],'result'),toolUseResult:{agentId:'a1'}},
+    {...user('delivery wrapper','delivery'),origin},{type:'attachment',attachment:{type:'queued_command',origin}}];
+  const agent={agentId:'a1',callId:'call',fileName:'subagents/agent-a1.jsonl',title:'Survey',reports:['## first report','second']};
+  const conv=c.ccToConv(jsonl(rows),{dirName:'p',s:{fileName:'session.jsonl',agentReports:[agent]}});
+  assert.equal(conv._cc.userCount,1);
+  const blocks=Array.from(conv.chat_messages).flatMap(m=>Array.from(m.content));
+  assert.deepEqual(blocks.map(b=>b.type),['text','tool_use','tool_result','agent_report','agent_report']);
+  assert.deepEqual(blocks.slice(-2).map(b=>[b.text,b.fileName]),[['## first report',agent.fileName],['second',agent.fileName]]);
+});
+
+test('fork metrics deduplicate split API messages independently for inherited and own turns',()=>{
+  const ids=['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002'];
+  const rows=ids.flatMap((sessionId,i)=>[user('question','u'+i),assistant([{type:'thinking',thinking:'wait'}],'a'+i),
+    assistant([{type:'text',text:'answer'}],'a'+i)].map(r=>({...r,sessionId})));
+  const info=c.ccSessionInfo(rows,ids[1]+'.jsonl');assert.equal(info.outTokens,8);
+  for(const scope of [info.branch.own,info.branch.inherited]){
+    assert.equal(scope.userCount,1);assert.equal(scope.assistantCount,1);assert.equal(scope.outTokens,4);
+  }
+});
+
+test('persisted output uses owner-scoped project handles in both import modes and preserves missing previews',async()=>{
+  vm.runInContext(section('function ccIndexWebFiles(files){','// ── CC NORMALIZATION:')+'\nthis.testStore=CCStore;',c);
+  const file={text:async()=>'whole result',webkitRelativePath:'archive/projects/p/owner/tool-results/out.txt',name:'out.txt'};
+  const marker=path=>'<persisted-output>\nOutput too large. Full output saved to: '+path+'\nPreview: partial\n</persisted-output>';
+  const fh={getFile:async()=>file};
+  const directory=o=>({async getFileHandle(n){if(!o[n])throw Error();return o[n];},async getDirectoryHandle(n){if(!o[n])throw Error();return o[n];}});
+  const projRoot=directory({p:directory({owner:directory({'tool-results':directory({'out.txt':fh})})})});
+  for(const store of [Object.assign(Object.create(c.testStore),{mode:'web',web:c.ccIndexWebFiles([file])}),
+    Object.assign(Object.create(c.testStore),{mode:'fsa',projRoot})]){
+    const read=p=>store._outputText('p','owner',marker(p));
+    assert.equal(await read('/old/machine/.claude/projects/p/owner/tool-results/out.txt'),'whole result');
+    for(const p of ['/projects/p/owner/tool-results/missing.txt','/projects/p/other/tool-results/out.txt','/projects/q/owner/tool-results/out.txt','/projects/p/owner/tool-results/..']){
+      const text=await read(p);assert.match(text,/仅保存了预览/);assert.ok(text.endsWith(marker(p)));
+    }
+  }
+});
