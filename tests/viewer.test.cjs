@@ -124,3 +124,17 @@ test('output files use matched successful results and retain distinct paths and 
     {content:[call('c','x/README.md'),result('c'),call('d','x/README.md'),result('d',true),call('e','unfinished'),call('f','input','Read'),result('f')]}]);
   assert.deepEqual(Array.from(files,item=>[item.path,item.index,item.step]),[['y/README.md',0,1],['x/README.md',1,0]]);
 });
+
+test('delivered mid-turn prompts split the original timeline and retain pictures only once',()=>{
+  const prompt=[{type:'image',source:{type:'base64',media_type:'image/png',data:'AA=='}},{type:'text',text:'update'}];
+  const queued={type:'attachment',uuid:'attachment',attachment:{type:'queued_command',commandMode:'prompt',humanTurn:true,origin:{kind:'human'},prompt,source_uuid:'source',delivery_id:'deliver',timestamp:'2026-11-11T01:00:00Z'}};
+  const rows=[assistant([{type:'text',text:'working'}],'a'),{type:'queue-operation',operation:'enqueue',content:'update'},queued,
+    {...queued,uuid:'replay'},user('update','source'),{type:'api-request-blob',message:{content:prompt}},
+    {...queued,uuid:'peer',attachment:{...queued.attachment,origin:{kind:'peer'},source_uuid:'p',delivery_id:'p'}},
+    assistant([{type:'text',text:'continued'}],'b','end_turn')];
+  const conv=c.ccToConv(jsonl(rows),meta);
+  assert.deepEqual(Array.from(conv.chat_messages,m=>m.sender),['assistant','human','assistant']);
+  assert.equal(conv._cc.userCount,1);
+  const m=conv.chat_messages[1];assert.equal(m._midTurn,true);assert.equal(m.created_at,queued.attachment.timestamp);
+  assert.deepEqual(Array.from(m.content,b=>b.type),['image','text']);assert.equal(m.content[1].text,'update');
+});
