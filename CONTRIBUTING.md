@@ -68,7 +68,20 @@
 
 ## 四、验证清单
 
-没有自动化测试，合并前请手动跑一遍：
+本地 `v6.0-code` 定制版增加了原生 Node 回归测试（无需 npm 依赖）：
+
+```sh
+node --test tests/viewer.test.cjs macos/tests/adapter.test.cjs
+```
+
+可选的真实浏览器测试使用 Playwright（仅开发时需要，不是查看器运行依赖），测试合成数据、虚拟滚动、两种目录读取后端、导出及 `file://` 打开：
+
+```sh
+# 在已可加载 playwright 的开发环境中运行。
+CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" node --test tests/browser.test.cjs
+```
+
+以下完整产品流程仍需按改动范围进行手动验收：
 
 - [ ] 导入**新版分片导出**（整个文件夹）→ 对话 / 项目 / 记忆 / 回顾 / 账户五类数据都在
 - [ ] 导入**旧版单 ZIP** → 完全不回归

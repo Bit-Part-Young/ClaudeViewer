@@ -2,6 +2,8 @@
 
 [简体中文](README.md) · **English**
 
+The local `v6.0-code.8` edition groups verified Claude Code forks under their parent in the project sidebar. Delegated agent tasks have a separate collapsible group under the owning session. Reports open inline in the parent transcript. Forks distinguish new turns and tokens from inherited history. Both searches match the same text, and standalone HTML embeds the full tool output when its file is available. Use the four activity controls to change disclosure depth. Chrome printing expands only the output file list. The transcript summarizes tool activity, previews embedded raster images, and indexes confirmed file edits. Click the arrow to toggle the branches or a title to open that transcript.
+
 > Runs locally · Zero install · Your data never leaves your device
 
 A single-file HTML tool for viewing and analyzing your personal data exported from Claude.ai. Double-click to use — no server, no network, no account required. **Since v5.2, all dependencies are inlined into the single file, so it works fully offline with zero external requests.**
